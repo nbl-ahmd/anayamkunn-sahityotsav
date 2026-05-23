@@ -11,8 +11,9 @@ import {
   ResultTextBox,
 } from "@/lib/results-types";
 
-const REGULAR_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSansMalayalam-Regular.ttf");
-const BOLD_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSansMalayalam-Bold.ttf");
+const LATIN_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSans-Regular.ttf");
+const MALAYALAM_REGULAR_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSansMalayalam-Regular.ttf");
+const MALAYALAM_BOLD_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSansMalayalam-Bold.ttf");
 
 let fontCssPromise: Promise<string> | null = null;
 
@@ -31,27 +32,33 @@ function escapeXml(value: string): string {
 
 async function getFontCss(): Promise<string> {
   if (!fontCssPromise) {
-    const regularUrl = pathToFileURL(REGULAR_FONT_PATH).href;
-    const boldUrl = pathToFileURL(BOLD_FONT_PATH).href;
+    const latinUrl = pathToFileURL(LATIN_FONT_PATH).href;
+    const malayalamRegularUrl = pathToFileURL(MALAYALAM_REGULAR_FONT_PATH).href;
+    const malayalamBoldUrl = pathToFileURL(MALAYALAM_BOLD_FONT_PATH).href;
     fontCssPromise = Promise.resolve(`
       @font-face {
+        font-family: "PosterLatin";
+        src: url("${latinUrl}") format("truetype");
+        font-weight: 100 900;
+      }
+      @font-face {
         font-family: "PosterMalayalam";
-        src: url("${regularUrl}") format("truetype");
+        src: url("${malayalamRegularUrl}") format("truetype");
         font-weight: 400 600;
       }
       @font-face {
         font-family: "PosterMalayalam";
-        src: url("${boldUrl}") format("truetype");
+        src: url("${malayalamBoldUrl}") format("truetype");
         font-weight: 700 900;
       }
       @font-face {
         font-family: "Noto Sans Malayalam";
-        src: url("${regularUrl}") format("truetype");
+        src: url("${malayalamRegularUrl}") format("truetype");
         font-weight: 400 600;
       }
       @font-face {
         font-family: "Noto Sans Malayalam";
-        src: url("${boldUrl}") format("truetype");
+        src: url("${malayalamBoldUrl}") format("truetype");
         font-weight: 700 900;
       }
     `);
@@ -267,7 +274,7 @@ function renderTextElement(
     <text
       clip-path="url(#${clipId})"
       fill="${escapeXml(layout.color)}"
-      font-family="${escapeXml(layout.fontFamily)}, PosterMalayalam, sans-serif"
+      font-family="PosterLatin, PosterMalayalam, ${escapeXml(layout.fontFamily)}, sans-serif"
       font-size="${fontSize}"
       font-weight="${layout.fontWeight}"
       text-anchor="${textAnchor}"
@@ -303,7 +310,7 @@ export async function renderResultPoster(
         <style>
           ${fontCss}
           text {
-            font-family: "PosterMalayalam", sans-serif;
+            font-family: "PosterLatin", "PosterMalayalam", sans-serif;
             paint-order: stroke fill;
           }
         </style>

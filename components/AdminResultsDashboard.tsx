@@ -41,6 +41,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const noneValue = "__none__";
+const posterRenderVersion = "text-v2";
 
 const emptyEntries: ResultEntry[] = [1, 2, 3].map((position) => ({
   position: position as 1 | 2 | 3,
@@ -321,6 +322,9 @@ export function AdminResultsDashboard() {
     const blob = await response.blob();
     downloadBlob(blob, `${name}.png`);
   };
+
+  const posterUrlForResult = (result: ResultsAdminSnapshot["results"][number]) =>
+    `/api/results/${result.id}/poster?templateId=${encodeURIComponent(result.templateId)}&v=${posterRenderVersion}`;
 
   const field = templateDraft.fields[activeField];
   const previewValues = useMemo(() => {
@@ -872,8 +876,8 @@ export function AdminResultsDashboard() {
                     <p className="text-sm text-slate-500">{result.category} · {new Date(result.publishedAt).toLocaleString()}</p>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => window.open(result.posterImageUrl, "_blank", "noopener,noreferrer")}>Open</Button>
-                    <Button onClick={() => downloadPoster(result.posterImageUrl, `result-${result.resultNumber}`)}>Download</Button>
+                    <Button variant="outline" onClick={() => window.open(posterUrlForResult(result), "_blank", "noopener,noreferrer")}>Open</Button>
+                    <Button onClick={() => downloadPoster(posterUrlForResult(result), `result-${result.resultNumber}`)}>Download</Button>
                   </div>
                 </div>
               )) : (

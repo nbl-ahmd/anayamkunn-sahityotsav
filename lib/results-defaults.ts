@@ -10,7 +10,7 @@ export const RESULT_POSTER_WIDTH = 1080;
 export const RESULT_POSTER_HEIGHT = 1080;
 export const RESULT_AD_HEIGHT = 270;
 
-const posterFont = "Noto Sans Malayalam";
+const posterFont = "Noto Sans";
 
 function box(input: Partial<ResultTextBox>): ResultTextBox {
   return {

@@ -4,13 +4,10 @@
 import { useMemo, useState } from "react";
 import {
   Award,
-  BadgeCheck,
   Copy,
   Download,
   ExternalLink,
-  Image as ImageIcon,
   ListChecks,
-  Sparkles,
   Trophy,
 } from "lucide-react";
 import { copyToClipboard, downloadBlob } from "@/lib/client-utils";
@@ -35,6 +32,7 @@ function templateApplies(template: ResultTemplateConfig, result: PublishedResult
 
 const selectClass =
   "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200";
+const posterRenderVersion = "text-v2";
 
 export function ResultsBrowser({ snapshot }: { snapshot: ResultsPublicSnapshot }) {
   const firstCategory = snapshot.programs[0]?.categoryGroup ?? "General";
@@ -69,9 +67,7 @@ export function ResultsBrowser({ snapshot }: { snapshot: ResultsPublicSnapshot }
 
   const activeTemplateId = templateId || result?.templateId || templates[0]?.id || "";
   const posterUrl = result
-    ? activeTemplateId === result.templateId
-      ? result.posterImageUrl
-      : `/api/results/${result.id}/poster?templateId=${encodeURIComponent(activeTemplateId)}`
+    ? `/api/results/${result.id}/poster?templateId=${encodeURIComponent(activeTemplateId)}&v=${posterRenderVersion}`
     : "";
 
   const onCategoryChange = (next: string) => {
@@ -101,52 +97,15 @@ export function ResultsBrowser({ snapshot }: { snapshot: ResultsPublicSnapshot }
 
   if (!snapshot.results.length) {
     return (
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_420px]">
-          <div className="flex min-h-[460px] flex-col justify-center p-6 sm:p-8 lg:p-10">
-            <div className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-amber-700">
-              <Sparkles className="h-3.5 w-3.5" />
-              Awaiting Results
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex min-h-[360px] items-center justify-center p-6 text-center sm:p-10">
+          <div className="max-w-xl">
+            <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-950 text-white shadow-sm">
+              <Trophy className="h-5 w-5" />
             </div>
-            <h2 className="max-w-xl text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+            <h2 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
               Official result posters will appear here once published.
             </h2>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
-              Official result posters will appear here once published.
-            </p>
-
-            <div className="mt-8 grid gap-3 sm:grid-cols-1">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-white text-slate-700 shadow-sm">
-                  <Trophy className="h-4 w-4" />
-                </div>
-                <p className="text-2xl font-black text-slate-950">0</p>
-                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Published</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-slate-200 bg-slate-950 p-6 lg:border-l lg:border-t-0 lg:p-8">
-            <div className="mx-auto flex max-w-[320px] flex-col gap-4">
-              <div className="aspect-square rounded-xl bg-white p-5 shadow-2xl">
-                <div className="mb-5 h-9 w-32 rounded bg-slate-200" />
-                <div className="mb-8 h-12 w-full rounded bg-amber-100" />
-                {[1, 2, 3].map((item) => (
-                  <div key={item} className="mb-5 flex items-center gap-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-black text-white">
-                      {item}
-                    </div>
-                    <div className="flex-1">
-                      <div className="h-4 w-4/5 rounded bg-slate-300" />
-                      <div className="mt-2 h-3 w-2/5 rounded bg-slate-200" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm leading-6 text-slate-300">
-                Official result posters will appear here once published.
-              </div>
-            </div>
           </div>
         </div>
       </section>
@@ -166,7 +125,7 @@ export function ResultsBrowser({ snapshot }: { snapshot: ResultsPublicSnapshot }
               Official result posters
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Select a published competition to preview the final poster and download the exact server-rendered image.
+              Select a published competition to preview and download the official result poster.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:min-w-[300px]">
@@ -279,7 +238,7 @@ export function ResultsBrowser({ snapshot }: { snapshot: ResultsPublicSnapshot }
               <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-bold text-slate-950">{result.competitionName}</p>
-                  <p className="text-xs text-slate-500">Server-rendered poster preview</p>
+                  <p className="text-xs text-slate-500">Official poster preview</p>
                 </div>
                 <Badge variant="secondary">{result.categoryGroup}</Badge>
               </div>
