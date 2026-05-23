@@ -66,7 +66,7 @@ const fieldLabels: Record<ResultFieldKey, string> = {
   thirdUnit: "3rd Unit",
 };
 
-const previewValues: Record<ResultFieldKey, string> = {
+const previewValuesBase: Record<ResultFieldKey, string> = {
   resultNumber: "Result 01",
   categoryName: "High School",
   competitionName: "Language Game English",
@@ -123,6 +123,7 @@ export function AdminResultsDashboard() {
   const [entries, setEntries] = useState<ResultEntry[]>(emptyEntries);
   const [templateDraft, setTemplateDraft] = useState<ResultTemplateConfig>(buildFreshTemplate);
   const [activeField, setActiveField] = useState<ResultFieldKey>("competitionName");
+  const [dragEnabled, setDragEnabled] = useState(true);
   const [adDraft, setAdDraft] = useState<ResultAdConfig>({
     id: "",
     name: "Sponsor Ad",
@@ -322,6 +323,14 @@ export function AdminResultsDashboard() {
   };
 
   const field = templateDraft.fields[activeField];
+  const previewValues = useMemo(() => {
+    const padded = "01";
+    const resultNumber = templateDraft.resultNumberFormat === "number" ? padded : `Result ${padded}`;
+    return {
+      ...previewValuesBase,
+      resultNumber,
+    };
+  }, [templateDraft.resultNumberFormat]);
   const templateScopeOptions = scopeTargets(programs, templateDraft.scopeType);
   const adScopeOptions = scopeTargets(programs, adDraft.scopeType);
 
@@ -554,6 +563,24 @@ export function AdminResultsDashboard() {
                     <Input value={templateDraft.name} onChange={(event) => setTemplateDraft((prev) => ({ ...prev, name: event.target.value }))} />
                   </div>
                   <div className="space-y-2">
+                    <Label>Result Number Format</Label>
+                    <Select
+                      value={templateDraft.resultNumberFormat}
+                      onValueChange={(value) =>
+                        setTemplateDraft((prev) => ({
+                          ...prev,
+                          resultNumberFormat: value as ResultTemplateConfig["resultNumberFormat"],
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="label">Result 01</SelectItem>
+                        <SelectItem value="number">01</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
                     <Label>Scope</Label>
                     <Select value={templateDraft.scopeType} onValueChange={(value) => setTemplateDraft((prev) => ({ ...prev, scopeType: value as ResultTemplateScopeType, scopeValue: null }))}>
                       <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
@@ -620,6 +647,41 @@ export function AdminResultsDashboard() {
                       <Label>Color</Label>
                       <Input type="color" value={field.color} onChange={(event) => setTemplateDraft((prev) => ({ ...prev, fields: { ...prev.fields, [activeField]: { ...field, color: event.target.value } } }))} />
                     </div>
+                    <div className="space-y-2">
+                      <Label>Font Family</Label>
+                      <Select
+                        value={field.fontFamily}
+                        onValueChange={(value) => setTemplateDraft((prev) => ({
+                          ...prev,
+                          fields: {
+                            ...prev.fields,
+                            [activeField]: { ...field, fontFamily: value },
+                          },
+                        }))}
+                      >
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Noto Sans Malayalam">Noto Sans Malayalam</SelectItem>
+                          <SelectItem value="'Poppins', sans-serif">Poppins</SelectItem>
+                          <SelectItem value="'Montserrat', sans-serif">Montserrat</SelectItem>
+                          <SelectItem value="'Merriweather', serif">Merriweather</SelectItem>
+                          <SelectItem value="'Oswald', sans-serif">Oswald</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Drag to Position</Label>
+                      <Select
+                        value={dragEnabled ? "on" : "off"}
+                        onValueChange={(value) => setDragEnabled(value === "on")}
+                      >
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="on">On</SelectItem>
+                          <SelectItem value="off">Off</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-4">
                     {(["x", "y", "width", "height"] as const).map((key) => (
@@ -678,7 +740,23 @@ export function AdminResultsDashboard() {
                 <CardDescription>{templateDraft.size.width}x{templateDraft.size.posterHeight} poster, {templateDraft.size.width}x{templateDraft.size.posterHeight + templateDraft.size.adHeight} with ad.</CardDescription>
               </CardHeader>
               <CardContent>
-                <ResultPosterPreview template={templateDraft} values={previewValues} />
+                <ResultPosterPreview
+                  template={templateDraft}
+                  values={previewValues}
+                  editable
+                  dragEnabled={dragEnabled}
+                  activeField={activeField}
+                  onSelectField={(key) => setActiveField(key)}
+                  onFieldChange={(key, patch) =>
+                    setTemplateDraft((prev) => ({
+                      ...prev,
+                      fields: {
+                        ...prev.fields,
+                        [key]: { ...prev.fields[key], ...patch },
+                      },
+                    }))
+                  }
+                />
               </CardContent>
             </Card>
           </div>

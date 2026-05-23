@@ -71,6 +71,7 @@ export interface ResultTemplateConfig {
   backgroundImage: string | null;
   size: ResultPosterSize;
   fields: ResultTemplateFields;
+  resultNumberFormat: "label" | "number";
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -149,6 +150,7 @@ export interface SaveResultTemplateInput {
   backgroundImage: string | null;
   size: ResultPosterSize;
   fields: ResultTemplateFields;
+  resultNumberFormat?: "label" | "number";
   active: boolean;
 }
 

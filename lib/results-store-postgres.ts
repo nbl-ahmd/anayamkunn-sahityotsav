@@ -26,6 +26,7 @@ type TemplateRow = {
   background_image: string | null;
   size: unknown;
   fields: unknown;
+  result_number_format?: string | null;
   active: boolean;
   created_at: string | Date;
   updated_at: string | Date;
@@ -100,10 +101,16 @@ async function ensureSchema(): Promise<void> {
         background_image TEXT,
         size JSONB NOT NULL,
         fields JSONB NOT NULL,
+        result_number_format TEXT,
         active BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMPTZ NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL
       );
+    `;
+
+    await sql`
+      ALTER TABLE result_templates
+      ADD COLUMN IF NOT EXISTS result_number_format TEXT;
     `;
 
     await sql`
@@ -167,6 +174,7 @@ async function ensureSchema(): Promise<void> {
         background_image,
         size,
         fields,
+        result_number_format,
         active,
         created_at,
         updated_at
@@ -178,6 +186,7 @@ async function ensureSchema(): Promise<void> {
         ${defaultTemplate.backgroundImage},
         ${JSON.stringify(defaultTemplate.size)}::jsonb,
         ${JSON.stringify(defaultTemplate.fields)}::jsonb,
+        ${defaultTemplate.resultNumberFormat},
         ${defaultTemplate.active},
         ${defaultTemplate.createdAt},
         ${defaultTemplate.updatedAt}
@@ -223,6 +232,10 @@ function rowToTemplate(row: TemplateRow): ResultTemplateConfig {
       ...defaults.fields,
       ...parseJson(row.fields, defaults.fields),
     },
+    resultNumberFormat:
+      row.result_number_format === "number" || row.result_number_format === "label"
+        ? row.result_number_format
+        : defaults.resultNumberFormat,
     active: Boolean(row.active),
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
@@ -409,6 +422,7 @@ export async function saveResultTemplate(input: SaveResultTemplateInput): Promis
       background_image,
       size,
       fields,
+      result_number_format,
       active,
       created_at,
       updated_at
@@ -420,6 +434,7 @@ export async function saveResultTemplate(input: SaveResultTemplateInput): Promis
       ${template.backgroundImage},
       ${JSON.stringify(template.size)}::jsonb,
       ${JSON.stringify(template.fields)}::jsonb,
+      ${template.resultNumberFormat},
       ${template.active},
       ${template.createdAt},
       ${template.updatedAt}
@@ -432,6 +447,7 @@ export async function saveResultTemplate(input: SaveResultTemplateInput): Promis
       background_image = EXCLUDED.background_image,
       size = EXCLUDED.size,
       fields = EXCLUDED.fields,
+      result_number_format = EXCLUDED.result_number_format,
       active = EXCLUDED.active,
       updated_at = EXCLUDED.updated_at
   `;

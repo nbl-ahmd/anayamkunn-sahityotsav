@@ -44,6 +44,16 @@ async function getFontCss(): Promise<string> {
         src: url("${boldUrl}") format("truetype");
         font-weight: 700 900;
       }
+      @font-face {
+        font-family: "Noto Sans Malayalam";
+        src: url("${regularUrl}") format("truetype");
+        font-weight: 400 600;
+      }
+      @font-face {
+        font-family: "Noto Sans Malayalam";
+        src: url("${boldUrl}") format("truetype");
+        font-weight: 700 900;
+      }
     `);
   }
 
@@ -95,14 +105,22 @@ function applyTransform(value: string, transform: ResultTextBox["textTransform"]
   return value;
 }
 
-function getFieldValues(result: PublishedResult): Record<ResultFieldKey, string> {
+function formatResultNumber(resultNumber: number, format: ResultTemplateConfig["resultNumberFormat"]): string {
+  const padded = String(resultNumber).padStart(2, "0");
+  return format === "number" ? padded : `Result ${padded}`;
+}
+
+function getFieldValues(
+  result: PublishedResult,
+  template: ResultTemplateConfig,
+): Record<ResultFieldKey, string> {
   const byPosition = new Map(result.entries.map((entry) => [entry.position, entry]));
   const first = byPosition.get(1);
   const second = byPosition.get(2);
   const third = byPosition.get(3);
 
   return {
-    resultNumber: `Result ${String(result.resultNumber).padStart(2, "0")}`,
+    resultNumber: formatResultNumber(result.resultNumber, template.resultNumberFormat),
     categoryName: result.category,
     competitionName: result.competitionName,
     firstPosition: "1",
@@ -249,6 +267,7 @@ function renderTextElement(
     <text
       clip-path="url(#${clipId})"
       fill="${escapeXml(layout.color)}"
+      font-family="${escapeXml(layout.fontFamily)}, PosterMalayalam, sans-serif"
       font-size="${fontSize}"
       font-weight="${layout.fontWeight}"
       text-anchor="${textAnchor}"
@@ -263,7 +282,7 @@ export async function renderResultPoster(
   const width = clamp(Math.round(template.size.width), 720, 2160);
   const posterHeight = clamp(Math.round(template.size.posterHeight), 720, 2160);
   const adHeight = ad ? clamp(Math.round(template.size.adHeight), 120, 720) : 0;
-  const values = getFieldValues(result);
+  const values = getFieldValues(result, template);
   const fontCss = await getFontCss();
   const backgroundLayer = template.backgroundImage
     ? `<image x="0" y="0" width="${width}" height="${posterHeight}" preserveAspectRatio="xMidYMid slice" href="${await imageToDataUri(template.backgroundImage)}" />`

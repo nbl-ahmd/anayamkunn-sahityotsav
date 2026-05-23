@@ -117,6 +117,10 @@ function normalizeTemplate(input: unknown): ResultTemplateConfig {
       posterHeight: Math.max(720, Number(template.size?.posterHeight ?? defaults.size.posterHeight)),
       adHeight: Math.max(120, Number(template.size?.adHeight ?? defaults.size.adHeight)),
     },
+    resultNumberFormat:
+      template.resultNumberFormat === "number" || template.resultNumberFormat === "label"
+        ? template.resultNumberFormat
+        : defaults.resultNumberFormat,
     fields: {
       ...defaults.fields,
       ...(isObject(template.fields) ? template.fields : {}),

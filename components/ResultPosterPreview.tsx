@@ -2,17 +2,32 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { RESULT_FIELD_KEYS, ResultFieldKey, ResultTemplateConfig } from "@/lib/results-types";
+import { RESULT_FIELD_KEYS, ResultFieldKey, ResultTemplateConfig, ResultTextBox } from "@/lib/results-types";
 
 interface ResultPosterPreviewProps {
   template: ResultTemplateConfig;
   values: Record<ResultFieldKey, string>;
   className?: string;
+  editable?: boolean;
+  dragEnabled?: boolean;
+  activeField?: ResultFieldKey | null;
+  onSelectField?: (key: ResultFieldKey) => void;
+  onFieldChange?: (key: ResultFieldKey, patch: Partial<ResultTextBox>) => void;
 }
 
-export function ResultPosterPreview({ template, values, className }: ResultPosterPreviewProps) {
+export function ResultPosterPreview({
+  template,
+  values,
+  className,
+  editable = false,
+  dragEnabled = false,
+  activeField,
+  onSelectField,
+  onFieldChange,
+}: ResultPosterPreviewProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(360);
+  const dragRef = useRef<{ key: ResultFieldKey; offsetX: number; offsetY: number } | null>(null);
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -61,17 +76,65 @@ export function ResultPosterPreview({ template, values, className }: ResultPoste
             return null;
           }
 
+          const isActive = activeField === key;
+
+          const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+            if (!editable) {
+              return;
+            }
+            onSelectField?.(key);
+            if (!dragEnabled || !wrapRef.current) {
+              return;
+            }
+            const rect = wrapRef.current.getBoundingClientRect();
+            const left = rect.left;
+            const top = rect.top;
+            const x = event.clientX - left - layout.x * rect.width;
+            const y = event.clientY - top - layout.y * rect.height;
+            dragRef.current = { key, offsetX: x, offsetY: y };
+            event.currentTarget.setPointerCapture(event.pointerId);
+          };
+
+          const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+            if (!dragEnabled || !editable || !wrapRef.current || !dragRef.current) {
+              return;
+            }
+            if (dragRef.current.key !== key) {
+              return;
+            }
+            const rect = wrapRef.current.getBoundingClientRect();
+            const rawX = (event.clientX - rect.left - dragRef.current.offsetX) / rect.width;
+            const rawY = (event.clientY - rect.top - dragRef.current.offsetY) / rect.height;
+            const nextX = Math.min(1 - layout.width, Math.max(0, rawX));
+            const nextY = Math.min(1 - layout.height, Math.max(0, rawY));
+            onFieldChange?.(key, { x: nextX, y: nextY });
+          };
+
+          const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+            if (dragRef.current?.key === key) {
+              dragRef.current = null;
+            }
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+          };
+
           return (
             <div
               key={key}
-              className="absolute flex overflow-hidden leading-tight"
+              className={`absolute flex overflow-hidden leading-tight ${editable ? "cursor-move" : ""} ${isActive ? "ring-2 ring-sky-400/70" : ""}`}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+              onClick={() => editable && onSelectField?.(key)}
               style={{
                 left: `${layout.x * 100}%`,
                 top: `${layout.y * 100}%`,
                 width: `${layout.width * 100}%`,
                 height: `${layout.height * 100}%`,
                 color: layout.color,
-                fontFamily: "'Noto Sans Malayalam', sans-serif",
+                fontFamily: layout.fontFamily,
                 fontSize: Math.max(7, layout.fontSize * scale),
                 fontWeight: layout.fontWeight,
                 lineHeight: layout.lineHeight,
