@@ -41,7 +41,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const noneValue = "__none__";
-const posterRenderVersion = "text-v2";
+const posterRenderVersion = "path-text-v1";
 
 const emptyEntries: ResultEntry[] = [1, 2, 3].map((position) => ({
   position: position as 1 | 2 | 3,
@@ -187,6 +187,43 @@ export function AdminResultsDashboard() {
     if (!selectedProgram) return templates.filter((template) => template.active);
     return templates.filter((template) => templateAppliesToProgram(template, selectedProgram));
   }, [selectedProgram, templates]);
+
+  const publishPreviewTemplate = useMemo(() => {
+    const selectedTemplate = templateId !== noneValue
+      ? templates.find((template) => template.id === templateId)
+      : undefined;
+
+    return selectedTemplate ?? matchingTemplates[0] ?? templates[0] ?? buildDefaultResultTemplate();
+  }, [matchingTemplates, templateId, templates]);
+
+  const existingSelectedResult = useMemo(
+    () => results.find((result) => result.programId === selectedProgram?.id),
+    [results, selectedProgram?.id],
+  );
+
+  const publishPreviewValues = useMemo<Record<ResultFieldKey, string>>(() => {
+    const resultNumber = existingSelectedResult?.resultNumber ?? results.length + 1;
+    const padded = String(resultNumber).padStart(2, "0");
+    const byPosition = new Map(entries.map((entry) => [entry.position, entry]));
+    const first = byPosition.get(1);
+    const second = byPosition.get(2);
+    const third = byPosition.get(3);
+
+    return {
+      resultNumber: publishPreviewTemplate.resultNumberFormat === "number" ? padded : `Result ${padded}`,
+      categoryName: selectedProgram?.category ?? category,
+      competitionName: selectedProgram?.competitionName ?? "Competition",
+      firstPosition: "1",
+      firstName: first?.name.trim() || "First winner name",
+      firstUnit: first?.unit ?? UNIT_LIST[0],
+      secondPosition: "2",
+      secondName: second?.name.trim() || "Second winner name",
+      secondUnit: second?.unit ?? UNIT_LIST[1],
+      thirdPosition: "3",
+      thirdName: third?.name.trim() || "Third winner name",
+      thirdUnit: third?.unit ?? UNIT_LIST[2],
+    };
+  }, [category, entries, existingSelectedResult?.resultNumber, publishPreviewTemplate.resultNumberFormat, results.length, selectedProgram]);
 
   const patchEntry = (position: 1 | 2 | 3, patch: Partial<ResultEntry>) => {
     setEntries((prev) => prev.map((entry) => (entry.position === position ? { ...entry, ...patch } : entry)));
@@ -413,7 +450,7 @@ export function AdminResultsDashboard() {
         </TabsList>
 
         <TabsContent value="publish" className="mt-4">
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_430px]">
             <Card>
               <CardHeader>
                 <CardTitle>Publish Result</CardTitle>
@@ -511,20 +548,32 @@ export function AdminResultsDashboard() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Selection</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <p className="font-semibold text-slate-900">{selectedProgram?.competitionName ?? "No program selected"}</p>
-                {selectedProgram && (
-                  <p className="text-slate-500">{selectedProgram.category}</p>
-                )}
-                <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-                  Result numbers are assigned when a competition is first published and stay fixed on edits.
-                </div>
-              </CardContent>
-            </Card>
+            <div className="space-y-4 xl:sticky xl:top-6 xl:self-start">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Selection</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <p className="font-semibold text-slate-900">{selectedProgram?.competitionName ?? "No program selected"}</p>
+                  {selectedProgram && (
+                    <p className="text-slate-500">{selectedProgram.category}</p>
+                  )}
+                  <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+                    Result numbers are assigned when a competition is first published and stay fixed on edits.
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Poster Preview</CardTitle>
+                  <CardDescription>Updates as winner details are entered.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResultPosterPreview template={publishPreviewTemplate} values={publishPreviewValues} />
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </TabsContent>
 

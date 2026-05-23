@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import sharp from "sharp";
+import TextToSVG from "text-to-svg";
 import {
   RESULT_FIELD_KEYS,
   ResultAdConfig,
@@ -15,56 +15,39 @@ const LATIN_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSans-Regular.
 const MALAYALAM_REGULAR_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSansMalayalam-Regular.ttf");
 const MALAYALAM_BOLD_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSansMalayalam-Bold.ttf");
 
-let fontCssPromise: Promise<string> | null = null;
+const textToSvgCache = new Map<string, TextToSVG.Instance>();
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-async function getFontCss(): Promise<string> {
-  if (!fontCssPromise) {
-    const latinUrl = pathToFileURL(LATIN_FONT_PATH).href;
-    const malayalamRegularUrl = pathToFileURL(MALAYALAM_REGULAR_FONT_PATH).href;
-    const malayalamBoldUrl = pathToFileURL(MALAYALAM_BOLD_FONT_PATH).href;
-    fontCssPromise = Promise.resolve(`
-      @font-face {
-        font-family: "PosterLatin";
-        src: url("${latinUrl}") format("truetype");
-        font-weight: 100 900;
-      }
-      @font-face {
-        font-family: "PosterMalayalam";
-        src: url("${malayalamRegularUrl}") format("truetype");
-        font-weight: 400 600;
-      }
-      @font-face {
-        font-family: "PosterMalayalam";
-        src: url("${malayalamBoldUrl}") format("truetype");
-        font-weight: 700 900;
-      }
-      @font-face {
-        font-family: "Noto Sans Malayalam";
-        src: url("${malayalamRegularUrl}") format("truetype");
-        font-weight: 400 600;
-      }
-      @font-face {
-        font-family: "Noto Sans Malayalam";
-        src: url("${malayalamBoldUrl}") format("truetype");
-        font-weight: 700 900;
-      }
-    `);
+function getTextToSvg(fontPath: string): TextToSVG.Instance {
+  const cached = textToSvgCache.get(fontPath);
+  if (cached) {
+    return cached;
   }
 
-  return fontCssPromise;
+  const instance = TextToSVG.loadSync(fontPath);
+  textToSvgCache.set(fontPath, instance);
+  return instance;
+}
+
+function containsMalayalam(text: string): boolean {
+  return /[\u0d00-\u0d7f]/.test(text);
+}
+
+function fontPathForText(text: string, fontWeight: number): string {
+  if (!containsMalayalam(text)) {
+    return LATIN_FONT_PATH;
+  }
+
+  return fontWeight >= 700 ? MALAYALAM_BOLD_FONT_PATH : MALAYALAM_REGULAR_FONT_PATH;
+}
+
+function safeSvgColor(color: string): string {
+  return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(color)
+    ? color
+    : "#111827";
 }
 
 async function loadImageBuffer(imageRef: string): Promise<Buffer> {
@@ -256,29 +239,28 @@ function renderTextElement(
         ? height - totalTextHeight + fontSize * 0.9
         : (height - totalTextHeight) / 2 + fontSize * 0.9;
 
-  const textAnchor =
-    layout.textAlign === "left" ? "start" : layout.textAlign === "right" ? "end" : "middle";
   const textX = left + (layout.textAlign === "left" ? 0 : layout.textAlign === "right" ? width : width / 2);
+  const anchor = `${layout.textAlign === "left" ? "left" : layout.textAlign === "right" ? "right" : "center"} baseline`;
   const clipId = `result-field-clip-${clipIndex}`;
-  const tspanLines = lines
-    .map(
-      (line, index) =>
-        `<tspan x="${textX}" y="${top + firstBaseline + index * lineHeight}">${escapeXml(line)}</tspan>`,
-    )
-    .join("");
+  const pathLines = lines.map((line, index) => {
+    const fontPath = fontPathForText(line, layout.fontWeight);
+    const textToSvg = getTextToSvg(fontPath);
+    return textToSvg.getPath(line, {
+      x: textX,
+      y: top + firstBaseline + index * lineHeight,
+      fontSize,
+      anchor,
+      attributes: {
+        fill: safeSvgColor(layout.color),
+      },
+    });
+  }).join("");
 
   return `
     <clipPath id="${clipId}">
       <rect x="${left}" y="${top}" width="${width}" height="${height}" />
     </clipPath>
-    <text
-      clip-path="url(#${clipId})"
-      fill="${escapeXml(layout.color)}"
-      font-family="PosterLatin, PosterMalayalam, ${escapeXml(layout.fontFamily)}, sans-serif"
-      font-size="${fontSize}"
-      font-weight="${layout.fontWeight}"
-      text-anchor="${textAnchor}"
-    >${tspanLines}</text>`;
+    <g clip-path="url(#${clipId})">${pathLines}</g>`;
 }
 
 export async function renderResultPoster(
@@ -290,7 +272,6 @@ export async function renderResultPoster(
   const posterHeight = clamp(Math.round(template.size.posterHeight), 720, 2160);
   const adHeight = ad ? clamp(Math.round(template.size.adHeight), 120, 720) : 0;
   const values = getFieldValues(result, template);
-  const fontCss = await getFontCss();
   const backgroundLayer = template.backgroundImage
     ? `<image x="0" y="0" width="${width}" height="${posterHeight}" preserveAspectRatio="xMidYMid slice" href="${await imageToDataUri(template.backgroundImage)}" />`
     : buildDefaultBackground(width, posterHeight);
@@ -306,15 +287,6 @@ export async function renderResultPoster(
   const outputHeight = posterHeight + adHeight;
   const svg = Buffer.from(`
     <svg width="${width}" height="${outputHeight}" viewBox="0 0 ${width} ${outputHeight}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <style>
-          ${fontCss}
-          text {
-            font-family: "PosterLatin", "PosterMalayalam", sans-serif;
-            paint-order: stroke fill;
-          }
-        </style>
-      </defs>
       ${backgroundLayer}
       ${textElements}
       ${adLayer}
