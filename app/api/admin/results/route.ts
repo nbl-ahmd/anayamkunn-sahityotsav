@@ -2,8 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_SESSION_COOKIE_NAME, isValidAdminSessionToken } from "@/lib/admin-auth";
 import { UNIT_LIST } from "@/lib/constants";
 import { getAdminResultsSnapshot, publishResult } from "@/lib/results-store";
-import { PublishResultInput, ResultEntry } from "@/lib/results-types";
+import {
+  RESULT_FIELD_KEYS,
+  PublishResultInput,
+  ResultEntry,
+  ResultTemplateFields,
+  ResultTextBox,
+} from "@/lib/results-types";
 import { UnitName } from "@/lib/types";
+import { buildDefaultResultTemplate } from "@/lib/results-defaults";
 
 export const runtime = "nodejs";
 
@@ -25,6 +32,51 @@ function normalizeEntry(input: Partial<ResultEntry>, position: 1 | 2 | 3): Resul
     codeLetter: typeof input.codeLetter === "string" ? input.codeLetter.trim().slice(0, 24) : "",
     points: typeof input.points === "string" ? input.points.trim().slice(0, 24) : "",
   };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeColor(value: unknown, fallback: string): string {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
+}
+
+function normalizeTextBox(input: Partial<ResultTextBox> | undefined, fallback: ResultTextBox): ResultTextBox {
+  const textAlign = input?.textAlign === "left" || input?.textAlign === "right" || input?.textAlign === "center"
+    ? input.textAlign
+    : fallback.textAlign;
+  const verticalAlign = input?.verticalAlign === "top" || input?.verticalAlign === "bottom" || input?.verticalAlign === "middle"
+    ? input.verticalAlign
+    : fallback.verticalAlign;
+
+  return {
+    ...fallback,
+    x: clamp(Number(input?.x ?? fallback.x), 0, 0.98),
+    y: clamp(Number(input?.y ?? fallback.y), 0, 0.98),
+    width: clamp(Number(input?.width ?? fallback.width), 0.02, 1),
+    height: clamp(Number(input?.height ?? fallback.height), 0.02, 1),
+    fontSize: clamp(Math.round(Number(input?.fontSize ?? fallback.fontSize)), 8, 180),
+    minFontSize: clamp(Math.round(Number(input?.minFontSize ?? fallback.minFontSize)), 8, 120),
+    fontFamily: fallback.fontFamily,
+    fontWeight: clamp(Math.round(Number(input?.fontWeight ?? fallback.fontWeight)), 300, 900),
+    color: normalizeColor(input?.color, fallback.color),
+    lineHeight: clamp(Number(input?.lineHeight ?? fallback.lineHeight), 0.9, 1.8),
+    textAlign,
+    verticalAlign,
+    textTransform: input?.textTransform === "uppercase" ? "uppercase" : "none",
+  };
+}
+
+function normalizeLayoutOverride(value: unknown): ResultTemplateFields | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const defaults = buildDefaultResultTemplate();
+  return RESULT_FIELD_KEYS.reduce((fields, key) => ({
+    ...fields,
+    [key]: normalizeTextBox((value as Partial<ResultTemplateFields>)[key], defaults.fields[key]),
+  }), defaults.fields);
 }
 
 export async function GET(req: NextRequest) {
@@ -51,6 +103,7 @@ export async function POST(req: NextRequest) {
     const input: PublishResultInput = {
       programId: typeof body.programId === "string" ? body.programId : "",
       templateId: typeof body.templateId === "string" && body.templateId ? body.templateId : undefined,
+      layoutOverride: normalizeLayoutOverride(body.layoutOverride),
       entries: [1, 2, 3].map((position) =>
         normalizeEntry(
           rawEntries.find((entry) => Number((entry as ResultEntry).position) === position) as Partial<ResultEntry> ?? {},

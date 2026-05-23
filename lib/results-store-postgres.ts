@@ -14,6 +14,7 @@ import {
   ResultsAdminSnapshot,
   ResultsPublicSnapshot,
   ResultTemplateConfig,
+  ResultTemplateFields,
   SaveResultAdInput,
   SaveResultTemplateInput,
 } from "@/lib/results-types";
@@ -54,6 +55,7 @@ type ResultRow = {
   result_number: number;
   entries: unknown;
   template_id: string;
+  layout_override: unknown;
   ad_id: string | null;
   poster_image_url: string;
   status: string;
@@ -81,6 +83,30 @@ function parseJson<T>(value: unknown, fallback: T): T {
 
 function normalizeUnit(value: unknown): UnitName {
   return UNIT_LIST.includes(value as UnitName) ? value as UnitName : UNIT_LIST[0];
+}
+
+function normalizeLayoutOverride(input: unknown): ResultTemplateFields | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+  const defaults = buildDefaultResultTemplate();
+  return {
+    ...defaults.fields,
+    ...input,
+  } as ResultTemplateFields;
+}
+
+function applyLayoutOverride(template: ResultTemplateConfig, override: ResultTemplateFields | null): ResultTemplateConfig {
+  if (!override) {
+    return template;
+  }
+  return {
+    ...template,
+    fields: {
+      ...template.fields,
+      ...override,
+    },
+  };
 }
 
 async function ensureSchema(): Promise<void> {
@@ -145,6 +171,7 @@ async function ensureSchema(): Promise<void> {
         result_number INTEGER NOT NULL UNIQUE,
         entries JSONB NOT NULL,
         template_id TEXT NOT NULL REFERENCES result_templates(id),
+        layout_override JSONB,
         ad_id TEXT REFERENCES result_ads(id),
         poster_image_url TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'published',
@@ -152,6 +179,11 @@ async function ensureSchema(): Promise<void> {
         created_at TIMESTAMPTZ NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL
       );
+    `;
+
+    await sql`
+      ALTER TABLE published_results
+      ADD COLUMN IF NOT EXISTS layout_override JSONB;
     `;
 
     await sql`
@@ -279,6 +311,7 @@ function rowToResult(row: ResultRow): PublishedResult | null {
     resultNumber: Number(row.result_number),
     entries: normalizeEntries(row.entries),
     templateId: row.template_id,
+    layoutOverride: normalizeLayoutOverride(row.layout_override),
     adId: row.ad_id,
     posterImageUrl: row.poster_image_url,
     status: "published",
@@ -562,6 +595,7 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
     resultNumber,
     entries,
     templateId: template.id,
+    layoutOverride: normalizeLayoutOverride(input.layoutOverride),
     adId: ad?.id ?? null,
     posterImageUrl: existing?.posterImageUrl ?? "",
     status: "published",
@@ -570,7 +604,7 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
     updatedAt: now,
   };
 
-  const poster = await renderResultPoster(result, template, ad);
+  const poster = await renderResultPoster(result, applyLayoutOverride(template, result.layoutOverride), ad);
   result.posterImageUrl = await persistGeneratedResultPoster({
     resultId: result.id,
     resultNumber,
@@ -587,6 +621,7 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
       result_number,
       entries,
       template_id,
+      layout_override,
       ad_id,
       poster_image_url,
       status,
@@ -602,6 +637,7 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
       ${result.resultNumber},
       ${JSON.stringify(result.entries)}::jsonb,
       ${result.templateId},
+      ${result.layoutOverride ? JSON.stringify(result.layoutOverride) : null}::jsonb,
       ${result.adId},
       ${result.posterImageUrl},
       ${result.status},
@@ -616,6 +652,7 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
       category_group = EXCLUDED.category_group,
       entries = EXCLUDED.entries,
       template_id = EXCLUDED.template_id,
+      layout_override = EXCLUDED.layout_override,
       ad_id = EXCLUDED.ad_id,
       poster_image_url = EXCLUDED.poster_image_url,
       status = EXCLUDED.status,
@@ -643,7 +680,10 @@ export async function renderPublishedResultPoster(input: {
   }
 
   const [templates, ads] = await Promise.all([getTemplates(), getAds()]);
-  const template = resolveTemplate(templates, result.programId, input.templateId ?? result.templateId);
+  const template = applyLayoutOverride(
+    resolveTemplate(templates, result.programId, input.templateId ?? result.templateId),
+    result.layoutOverride,
+  );
   const ad = result.adId ? ads.find((item) => item.id === result.adId) ?? null : null;
   const buffer = await renderResultPoster(result, template, ad);
   return { buffer, result, template };

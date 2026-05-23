@@ -14,6 +14,7 @@ import {
   ResultsPublicSnapshot,
   ResultStoreData,
   ResultTemplateConfig,
+  ResultTemplateFields,
   SaveResultAdInput,
   SaveResultTemplateInput,
 } from "@/lib/results-types";
@@ -131,6 +132,30 @@ function normalizeTemplate(input: unknown): ResultTemplateConfig {
   };
 }
 
+function normalizeLayoutOverride(input: unknown): ResultTemplateFields | null {
+  if (!isObject(input)) {
+    return null;
+  }
+  const defaults = buildDefaultResultTemplate();
+  return {
+    ...defaults.fields,
+    ...input,
+  } as ResultTemplateFields;
+}
+
+function applyLayoutOverride(template: ResultTemplateConfig, override: ResultTemplateFields | null): ResultTemplateConfig {
+  if (!override) {
+    return template;
+  }
+  return {
+    ...template,
+    fields: {
+      ...template.fields,
+      ...override,
+    },
+  };
+}
+
 function normalizeAd(input: unknown): ResultAdConfig | null {
   if (!isObject(input)) {
     return null;
@@ -179,6 +204,7 @@ function normalizeResult(input: unknown): PublishedResult | null {
     resultNumber: Math.max(1, Math.floor(Number(result.resultNumber))),
     entries: normalizeEntries(result.entries),
     templateId: typeof result.templateId === "string" && result.templateId ? result.templateId : DEFAULT_RESULT_TEMPLATE_ID,
+    layoutOverride: normalizeLayoutOverride(result.layoutOverride),
     adId: typeof result.adId === "string" && result.adId ? result.adId : null,
     posterImageUrl: result.posterImageUrl,
     status: "published",
@@ -371,6 +397,7 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
       resultNumber,
       entries,
       templateId: template.id,
+      layoutOverride: normalizeLayoutOverride(input.layoutOverride),
       adId: ad?.id ?? null,
       posterImageUrl: existing?.posterImageUrl ?? "",
       status: "published",
@@ -379,7 +406,7 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
       updatedAt: now,
     };
 
-    const poster = await renderResultPoster(result, template, ad);
+    const poster = await renderResultPoster(result, applyLayoutOverride(template, result.layoutOverride), ad);
     result.posterImageUrl = await persistGeneratedResultPoster({
       resultId: result.id,
       resultNumber,
@@ -407,7 +434,10 @@ export async function renderPublishedResultPoster(input: {
     throw new Error("Result not found");
   }
 
-  const template = resolveTemplate(store.templates, result.programId, input.templateId ?? result.templateId);
+  const template = applyLayoutOverride(
+    resolveTemplate(store.templates, result.programId, input.templateId ?? result.templateId),
+    result.layoutOverride,
+  );
   const ad = result.adId ? store.ads.find((item) => item.id === result.adId) ?? null : null;
   const buffer = await renderResultPoster(result, template, ad);
   return { buffer, result, template };

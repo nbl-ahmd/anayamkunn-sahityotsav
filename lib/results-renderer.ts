@@ -13,10 +13,19 @@ import {
 } from "@/lib/results-types";
 
 const LATIN_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSans-Regular.ttf");
+const COOPER_FONT_PATH = path.join(process.cwd(), "public/fonts/Cooper Black Regular.ttf");
 const MALAYALAM_REGULAR_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSansMalayalam-Regular.ttf");
 const MALAYALAM_BOLD_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSansMalayalam-Bold.ttf");
 
 const textToSvgCache = new Map<string, TextToSVG.Instance>();
+
+interface TextMetrics {
+  width: number;
+}
+
+type TextToSvgWithMetrics = TextToSVG.Instance & {
+  getMetrics(text: string, options: { fontSize: number }): TextMetrics;
+};
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -37,12 +46,12 @@ function containsMalayalam(text: string): boolean {
   return /[\u0d00-\u0d7f]/.test(text);
 }
 
-function fontPathForText(text: string, fontWeight: number): string {
+function fontPathForText(text: string, layout: Pick<ResultTextBox, "fontFamily" | "fontWeight">): string {
   if (!containsMalayalam(text)) {
-    return LATIN_FONT_PATH;
+    return layout.fontFamily.toLowerCase().includes("cooper") ? COOPER_FONT_PATH : LATIN_FONT_PATH;
   }
 
-  return fontWeight >= 700 ? MALAYALAM_BOLD_FONT_PATH : MALAYALAM_REGULAR_FONT_PATH;
+  return layout.fontWeight >= 700 ? MALAYALAM_BOLD_FONT_PATH : MALAYALAM_REGULAR_FONT_PATH;
 }
 
 function safeSvgColor(color: string): string {
@@ -108,48 +117,43 @@ function getFieldValues(
   const first = byPosition.get(1);
   const second = byPosition.get(2);
   const third = byPosition.get(3);
+  const hasFirst = Boolean(first?.name.trim());
+  const hasSecond = Boolean(second?.name.trim());
+  const hasThird = Boolean(third?.name.trim());
 
   return {
     resultNumber: formatResultNumber(result.resultNumber),
     categoryName: result.category,
     competitionName: getPublicCompetitionName(result.competitionName),
-    firstPosition: "1",
+    firstPosition: hasFirst ? "1" : "",
     firstName: first?.name ?? "",
     firstUnit: first?.unit ?? "",
-    secondPosition: "2",
+    secondPosition: hasSecond ? "2" : "",
     secondName: second?.name ?? "",
     secondUnit: second?.unit ?? "",
-    thirdPosition: "3",
+    thirdPosition: hasThird ? "3" : "",
     thirdName: third?.name ?? "",
     thirdUnit: third?.unit ?? "",
   };
 }
 
-function charWidthUnit(char: string): number {
-  if (/\s/.test(char)) return 0.34;
-  if (/[\u0d00-\u0d7f]/.test(char)) return 0.82;
-  if (/[A-Z0-9]/.test(char)) return 0.62;
-  return 0.54;
+function measureTextWidth(text: string, layout: ResultTextBox, fontSize: number): number {
+  const fontPath = fontPathForText(text, layout);
+  const textToSvg = getTextToSvg(fontPath) as TextToSvgWithMetrics;
+  return textToSvg.getMetrics(text, { fontSize }).width;
 }
 
-function measureUnits(text: string): number {
-  return [...text].reduce((sum, char) => sum + charWidthUnit(char), 0);
-}
-
-function splitLongWord(word: string, maxUnits: number): string[] {
+function splitLongWord(word: string, layout: ResultTextBox, fontSize: number, maxWidth: number): string[] {
   const parts: string[] = [];
   let current = "";
-  let currentUnits = 0;
 
   for (const char of [...word]) {
-    const nextUnits = charWidthUnit(char);
-    if (current && currentUnits + nextUnits > maxUnits) {
+    const next = `${current}${char}`;
+    if (current && measureTextWidth(next, layout, fontSize) > maxWidth) {
       parts.push(current);
       current = char;
-      currentUnits = nextUnits;
     } else {
-      current += char;
-      currentUnits += nextUnits;
+      current = next;
     }
   }
 
@@ -160,16 +164,19 @@ function splitLongWord(word: string, maxUnits: number): string[] {
   return parts;
 }
 
-function wrapText(text: string, maxUnits: number): string[] {
+function wrapText(text: string, layout: ResultTextBox, fontSize: number, maxWidth: number): string[] {
   const words = text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let current = "";
 
   for (const word of words) {
-    const fragments = measureUnits(word) > maxUnits ? splitLongWord(word, maxUnits) : [word];
+    const fragments =
+      measureTextWidth(word, layout, fontSize) > maxWidth
+        ? splitLongWord(word, layout, fontSize, maxWidth)
+        : [word];
     for (const fragment of fragments) {
       const next = current ? `${current} ${fragment}` : fragment;
-      if (current && measureUnits(next) > maxUnits) {
+      if (current && measureTextWidth(next, layout, fontSize) > maxWidth) {
         lines.push(current);
         current = fragment;
       } else {
@@ -188,23 +195,22 @@ function wrapText(text: string, maxUnits: number): string[] {
 function fitText(text: string, layout: ResultTextBox, width: number, height: number) {
   const maxFontSize = clamp(Math.round(layout.fontSize), 8, 180);
   const minFontSize = clamp(Math.round(layout.minFontSize), 8, maxFontSize);
+  const maxWidth = Math.max(1, width - 8);
 
   for (let fontSize = maxFontSize; fontSize >= minFontSize; fontSize -= 1) {
-    const maxUnits = Math.max(1, (width - 8) / fontSize);
-    const lines = wrapText(text, maxUnits);
+    const lines = wrapText(text, layout, fontSize, maxWidth);
     const maxLines = Math.max(1, Math.floor(height / (fontSize * layout.lineHeight)));
     if (lines.length <= maxLines) {
       return { fontSize, lines };
     }
   }
 
-  const maxUnits = Math.max(1, (width - 8) / minFontSize);
   const maxLines = Math.max(1, Math.floor(height / (minFontSize * layout.lineHeight)));
-  const lines = wrapText(text, maxUnits).slice(0, maxLines);
+  const lines = wrapText(text, layout, minFontSize, maxWidth).slice(0, maxLines);
   if (lines.length) {
     const last = lines[lines.length - 1];
     let truncated = last;
-    while (truncated.length > 1 && measureUnits(`${truncated}...`) > maxUnits) {
+    while (truncated.length > 1 && measureTextWidth(`${truncated}...`, layout, minFontSize) > maxWidth) {
       truncated = truncated.slice(0, -1);
     }
     lines[lines.length - 1] = `${truncated.trim()}...`;
@@ -243,8 +249,11 @@ function renderTextElement(
   const anchor = `${layout.textAlign === "left" ? "left" : layout.textAlign === "right" ? "right" : "center"} baseline`;
   const clipId = `result-field-clip-${clipIndex}`;
   const pathLines = lines.map((line, index) => {
-    const fontPath = fontPathForText(line, layout.fontWeight);
+    const fontPath = fontPathForText(line, layout);
     const textToSvg = getTextToSvg(fontPath);
+    const syntheticStrokeWidth = !containsMalayalam(line) && layout.fontWeight >= 700
+      ? Math.max(0.4, fontSize * 0.018)
+      : 0;
     return textToSvg.getPath(line, {
       x: textX,
       y: top + firstBaseline + index * lineHeight,
@@ -252,6 +261,14 @@ function renderTextElement(
       anchor,
       attributes: {
         fill: safeSvgColor(layout.color),
+        ...(syntheticStrokeWidth
+          ? {
+              stroke: safeSvgColor(layout.color),
+              "stroke-width": syntheticStrokeWidth,
+              "stroke-linejoin": "round",
+              "paint-order": "stroke fill",
+            }
+          : {}),
       },
     });
   }).join("");

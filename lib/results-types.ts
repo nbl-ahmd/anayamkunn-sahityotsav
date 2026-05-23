@@ -96,6 +96,7 @@ export interface PublishedResult {
   resultNumber: number;
   entries: ResultEntry[];
   templateId: string;
+  layoutOverride: ResultTemplateFields | null;
   adId: string | null;
   posterImageUrl: string;
   status: "published";
@@ -141,6 +142,7 @@ export interface PublishResultInput {
   programId: string;
   entries: ResultEntry[];
   templateId?: string;
+  layoutOverride?: ResultTemplateFields | null;
 }
 
 export interface SaveResultTemplateInput {

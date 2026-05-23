@@ -32,7 +32,7 @@ function templateApplies(template: ResultTemplateConfig, result: PublishedResult
 
 const selectClass =
   "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200";
-const posterRenderVersion = "path-text-v1";
+const posterRenderVersion = "path-text-v2";
 
 export function ResultsBrowser({ snapshot }: { snapshot: ResultsPublicSnapshot }) {
   const firstCategory = snapshot.programs[0]?.categoryGroup ?? "General";

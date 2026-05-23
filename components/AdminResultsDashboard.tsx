@@ -27,7 +27,9 @@ import {
   ResultProgram,
   ResultsAdminSnapshot,
   ResultTemplateConfig,
+  ResultTemplateFields,
   ResultTemplateScopeType,
+  ResultTextBox,
 } from "@/lib/results-types";
 import { ResultPosterPreview } from "@/components/ResultPosterPreview";
 import { AdminMetricCard } from "@/components/admin/AdminMetricCard";
@@ -41,7 +43,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const noneValue = "__none__";
-const posterRenderVersion = "path-text-v1";
+const posterRenderVersion = "path-text-v2";
 
 const emptyEntries: ResultEntry[] = [1, 2, 3].map((position) => ({
   position: position as 1 | 2 | 3,
@@ -67,6 +69,11 @@ const fieldLabels: Record<ResultFieldKey, string> = {
   thirdUnit: "3rd Unit",
 };
 
+const winnerNameFields: ResultFieldKey[] = ["firstName", "secondName", "thirdName"];
+const winnerUnitFields: ResultFieldKey[] = ["firstUnit", "secondUnit", "thirdUnit"];
+
+type PublishLayoutTarget = "field" | "winnerNames" | "winnerUnits";
+
 const previewValuesBase: Record<ResultFieldKey, string> = {
   resultNumber: "Result 01",
   categoryName: "High School",
@@ -90,6 +97,13 @@ function buildFreshTemplate(): ResultTemplateConfig {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
+}
+
+function cloneFields(fields: ResultTemplateFields): ResultTemplateFields {
+  return RESULT_FIELD_KEYS.reduce((next, key) => ({
+    ...next,
+    [key]: { ...fields[key] },
+  }), {} as ResultTemplateFields);
 }
 
 function scopeTargets(programs: ResultProgram[], scopeType: ResultTemplateScopeType) {
@@ -159,6 +173,11 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
   const [templateId, setTemplateId] = useState<string>(noneValue);
   const [entries, setEntries] = useState<ResultEntry[]>(emptyEntries);
   const [visiblePositions, setVisiblePositions] = useState<Record<2 | 3, boolean>>({ 2: true, 3: true });
+  const [publishLayoutOpen, setPublishLayoutOpen] = useState(false);
+  const [publishLayoutDraft, setPublishLayoutDraft] = useState<ResultTemplateFields | null>(null);
+  const [publishActiveField, setPublishActiveField] = useState<ResultFieldKey>("firstName");
+  const [publishLayoutTarget, setPublishLayoutTarget] = useState<PublishLayoutTarget>("field");
+  const [publishDragEnabled, setPublishDragEnabled] = useState(true);
   const [templateDraft, setTemplateDraft] = useState<ResultTemplateConfig>(buildFreshTemplate);
   const [activeField, setActiveField] = useState<ResultFieldKey>("competitionName");
   const [dragEnabled, setDragEnabled] = useState(true);
@@ -225,13 +244,24 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
     return templates.filter((template) => templateAppliesToProgram(template, selectedProgram));
   }, [selectedProgram, templates]);
 
-  const publishPreviewTemplate = useMemo(() => {
+  const publishBaseTemplate = useMemo(() => {
     const selectedTemplate = templateId !== noneValue
       ? templates.find((template) => template.id === templateId)
       : undefined;
 
     return selectedTemplate ?? matchingTemplates[0] ?? templates[0] ?? buildDefaultResultTemplate();
   }, [matchingTemplates, templateId, templates]);
+
+  useEffect(() => {
+    if (publishLayoutOpen) {
+      setPublishLayoutDraft(cloneFields(publishBaseTemplate.fields));
+    }
+  }, [publishBaseTemplate, publishLayoutOpen]);
+
+  const publishPreviewTemplate = useMemo<ResultTemplateConfig>(() => ({
+    ...publishBaseTemplate,
+    fields: publishLayoutOpen && publishLayoutDraft ? publishLayoutDraft : publishBaseTemplate.fields,
+  }), [publishBaseTemplate, publishLayoutDraft, publishLayoutOpen]);
 
   const existingSelectedResult = useMemo(
     () => results.find((result) => result.programId === selectedProgram?.id),
@@ -297,6 +327,51 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
     setVisiblePositions((prev) => ({ ...prev, [position]: true }));
   };
 
+  const setPublishLayoutEnabled = (enabled: boolean) => {
+    setPublishLayoutOpen(enabled);
+    setPublishLayoutDraft(enabled ? cloneFields(publishBaseTemplate.fields) : null);
+  };
+
+  const publishTargetFields = useMemo(() => {
+    if (publishLayoutTarget === "winnerNames") {
+      return winnerNameFields;
+    }
+    if (publishLayoutTarget === "winnerUnits") {
+      return winnerUnitFields;
+    }
+    return [publishActiveField];
+  }, [publishActiveField, publishLayoutTarget]);
+
+  const patchPublishField = (key: ResultFieldKey, patch: Partial<ResultTextBox>) => {
+    setPublishLayoutDraft((current) => {
+      const fields = current ?? cloneFields(publishBaseTemplate.fields);
+      return {
+        ...fields,
+        [key]: {
+          ...fields[key],
+          ...patch,
+        },
+      };
+    });
+  };
+
+  const patchPublishTarget = (patch: Partial<ResultTextBox>) => {
+    setPublishLayoutDraft((current) => {
+      const fields = current ?? cloneFields(publishBaseTemplate.fields);
+      return publishTargetFields.reduce((next, key) => ({
+        ...next,
+        [key]: {
+          ...next[key],
+          ...patch,
+        },
+      }), fields);
+    });
+  };
+
+  const resetPublishLayout = () => {
+    setPublishLayoutDraft(cloneFields(publishBaseTemplate.fields));
+  };
+
   const onCategoryChange = (nextCategory: string) => {
     setCategory(nextCategory);
     const nextProgram = programs.find((program) => program.categoryGroup === nextCategory);
@@ -359,6 +434,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
         body: JSON.stringify({
           programId: selectedProgram.id,
           templateId: templateId === noneValue ? undefined : templateId,
+          layoutOverride: publishLayoutOpen && publishLayoutDraft ? publishLayoutDraft : null,
           entries,
         }),
       });
@@ -369,6 +445,8 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
       toast.success("Result published and poster generated.");
       setEntries(emptyEntries);
       setVisiblePositions({ 2: true, 3: true });
+      setPublishLayoutOpen(false);
+      setPublishLayoutDraft(null);
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not publish result.");
@@ -433,6 +511,12 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
     `/api/results/${result.id}/poster?templateId=${encodeURIComponent(result.templateId)}&v=${posterRenderVersion}`;
 
   const field = templateDraft.fields[activeField];
+  const publishLayoutReferenceKey = publishLayoutTarget === "winnerNames"
+    ? "firstName"
+    : publishLayoutTarget === "winnerUnits"
+      ? "firstUnit"
+      : publishActiveField;
+  const publishLayoutField = publishPreviewTemplate.fields[publishLayoutReferenceKey];
   const previewValues = useMemo(() => {
     const padded = "01";
     const resultNumber = padded;
@@ -608,6 +692,111 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                   </Select>
                 </div>
 
+                <div className="rounded-xl border border-slate-200 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-black text-slate-950">Poster text adjustment</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        Optional per-result layout controls for long names or spacing fixes.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant={publishLayoutOpen ? "default" : "outline"}
+                      onClick={() => setPublishLayoutEnabled(!publishLayoutOpen)}
+                    >
+                      {publishLayoutOpen ? "Hide Controls" : "Adjust Text"}
+                    </Button>
+                  </div>
+
+                  {publishLayoutOpen ? (
+                    <div className="mt-4 space-y-4 border-t border-slate-100 pt-4">
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Adjust</Label>
+                          <Select value={publishLayoutTarget} onValueChange={(value) => setPublishLayoutTarget(value as PublishLayoutTarget)}>
+                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="field">Selected field</SelectItem>
+                              <SelectItem value="winnerNames">All winner names</SelectItem>
+                              <SelectItem value="winnerUnits">All winner units</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Field</Label>
+                          <Select
+                            value={publishActiveField}
+                            onValueChange={(value) => {
+                              setPublishActiveField(value as ResultFieldKey);
+                              setPublishLayoutTarget("field");
+                            }}
+                          >
+                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {RESULT_FIELD_KEYS.map((key) => <SelectItem key={key} value={key}>{fieldLabels[key]}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Drag on preview</Label>
+                          <Select value={publishDragEnabled ? "on" : "off"} onValueChange={(value) => setPublishDragEnabled(value === "on")}>
+                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="on">On</SelectItem>
+                              <SelectItem value="off">Off</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-4">
+                        {(["x", "y", "width", "height"] as const).map((key) => (
+                          <div key={key} className="space-y-1.5">
+                            <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">{key.toUpperCase()} %</Label>
+                            <Input
+                              type="number"
+                              step="0.5"
+                              value={Math.round(publishLayoutField[key] * 1000) / 10}
+                              onChange={(event) => patchPublishTarget({ [key]: Number(event.target.value) / 100 })}
+                            />
+                          </div>
+                        ))}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Font</Label>
+                          <Input type="number" value={publishLayoutField.fontSize} onChange={(event) => patchPublishTarget({ fontSize: Number(event.target.value) })} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Min Font</Label>
+                          <Input type="number" value={publishLayoutField.minFontSize} onChange={(event) => patchPublishTarget({ minFontSize: Number(event.target.value) })} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Line Height</Label>
+                          <Input type="number" step="0.05" value={publishLayoutField.lineHeight} onChange={(event) => patchPublishTarget({ lineHeight: Number(event.target.value) })} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Align</Label>
+                          <Select value={publishLayoutField.textAlign} onValueChange={(value) => patchPublishTarget({ textAlign: value as ResultTextBox["textAlign"] })}>
+                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="left">Left</SelectItem>
+                              <SelectItem value="center">Center</SelectItem>
+                              <SelectItem value="right">Right</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-xs leading-5 text-slate-500">
+                          These changes are saved only with this result poster and will not update the selected template.
+                        </p>
+                        <Button type="button" variant="outline" onClick={resetPublishLayout}>Reset Layout</Button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
                 <div className="space-y-3">
                   {entries.map((entry) => {
                     const optionalPosition = entry.position > 1 ? entry.position as 2 | 3 : null;
@@ -716,7 +905,19 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                   <CardDescription>Shows the generated poster with the assigned sponsor ad when one applies.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ResultPosterPreview template={publishPreviewTemplate} values={publishPreviewValues} ad={publishPreviewAd} />
+                  <ResultPosterPreview
+                    template={publishPreviewTemplate}
+                    values={publishPreviewValues}
+                    ad={publishPreviewAd}
+                    editable={publishLayoutOpen}
+                    dragEnabled={publishDragEnabled}
+                    activeField={publishActiveField}
+                    onSelectField={(key) => {
+                      setPublishActiveField(key);
+                      setPublishLayoutTarget("field");
+                    }}
+                    onFieldChange={patchPublishField}
+                  />
                 </CardContent>
               </Card>
             </div>
