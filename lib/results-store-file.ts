@@ -202,16 +202,21 @@ function normalizeUnit(value: unknown): UnitName {
 
 function normalizeEntries(entries: unknown): ResultEntry[] {
   const list = Array.isArray(entries) ? entries : [];
-  return [1, 2, 3].map((position) => {
+  return [1, 2, 3].flatMap((position) => {
     const entry = list.find((item) => isObject(item) && Number(item.position) === position) as Partial<ResultEntry> | undefined;
-    return {
+    const name = typeof entry?.name === "string" ? entry.name.trim().slice(0, 120) : "";
+    if (!name) {
+      return [];
+    }
+
+    return [{
       position: position as 1 | 2 | 3,
-      name: typeof entry?.name === "string" ? entry.name.trim().slice(0, 120) : "",
+      name,
       unit: normalizeUnit(entry?.unit),
       chestNumber: typeof entry?.chestNumber === "string" ? entry.chestNumber.trim().slice(0, 24) : "",
       codeLetter: typeof entry?.codeLetter === "string" ? entry.codeLetter.trim().slice(0, 24) : "",
       points: typeof entry?.points === "string" ? entry.points.trim().slice(0, 24) : "",
-    };
+    }];
   });
 }
 
@@ -345,8 +350,8 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
     }
 
     const entries = normalizeEntries(input.entries);
-    if (entries.some((entry) => !entry.name.trim())) {
-      throw new Error("Winner names are required for all three positions");
+    if (!entries.some((entry) => entry.position === 1)) {
+      throw new Error("First position winner is required");
     }
 
     const now = new Date().toISOString();

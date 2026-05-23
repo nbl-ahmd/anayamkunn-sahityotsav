@@ -158,6 +158,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
   const [programId, setProgramId] = useState("");
   const [templateId, setTemplateId] = useState<string>(noneValue);
   const [entries, setEntries] = useState<ResultEntry[]>(emptyEntries);
+  const [visiblePositions, setVisiblePositions] = useState<Record<2 | 3, boolean>>({ 2: true, 3: true });
   const [templateDraft, setTemplateDraft] = useState<ResultTemplateConfig>(buildFreshTemplate);
   const [activeField, setActiveField] = useState<ResultFieldKey>("competitionName");
   const [dragEnabled, setDragEnabled] = useState(true);
@@ -252,6 +253,8 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
     const first = byPosition.get(1);
     const second = byPosition.get(2);
     const third = byPosition.get(3);
+    const hasSecond = visiblePositions[2];
+    const hasThird = visiblePositions[3];
 
     return {
       resultNumber: padded,
@@ -260,17 +263,38 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
       firstPosition: "1",
       firstName: first?.name.trim() || "First winner name",
       firstUnit: first?.unit ?? UNIT_LIST[0],
-      secondPosition: "2",
-      secondName: second?.name.trim() || "Second winner name",
-      secondUnit: second?.unit ?? UNIT_LIST[1],
-      thirdPosition: "3",
-      thirdName: third?.name.trim() || "Third winner name",
-      thirdUnit: third?.unit ?? UNIT_LIST[2],
+      secondPosition: hasSecond ? "2" : "",
+      secondName: hasSecond ? second?.name.trim() || "Second winner name" : "",
+      secondUnit: hasSecond ? second?.unit ?? UNIT_LIST[1] : "",
+      thirdPosition: hasThird ? "3" : "",
+      thirdName: hasThird ? third?.name.trim() || "Third winner name" : "",
+      thirdUnit: hasThird ? third?.unit ?? UNIT_LIST[2] : "",
     };
-  }, [category, entries, publishPreviewResultNumber, selectedProgram]);
+  }, [category, entries, publishPreviewResultNumber, selectedProgram, visiblePositions]);
 
   const patchEntry = (position: 1 | 2 | 3, patch: Partial<ResultEntry>) => {
     setEntries((prev) => prev.map((entry) => (entry.position === position ? { ...entry, ...patch } : entry)));
+  };
+
+  const clearEntry = (position: 2 | 3) => {
+    setVisiblePositions((prev) => ({ ...prev, [position]: false }));
+    setEntries((prev) =>
+      prev.map((entry) =>
+        entry.position === position
+          ? {
+              ...entry,
+              name: "",
+              chestNumber: "",
+              codeLetter: "",
+              points: "",
+            }
+          : entry,
+      ),
+    );
+  };
+
+  const showEntry = (position: 2 | 3) => {
+    setVisiblePositions((prev) => ({ ...prev, [position]: true }));
   };
 
   const onCategoryChange = (nextCategory: string) => {
@@ -344,6 +368,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
       }
       toast.success("Result published and poster generated.");
       setEntries(emptyEntries);
+      setVisiblePositions({ 2: true, 3: true });
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not publish result.");
@@ -584,10 +609,39 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                 </div>
 
                 <div className="space-y-3">
-                  {entries.map((entry) => (
+                  {entries.map((entry) => {
+                    const optionalPosition = entry.position > 1 ? entry.position as 2 | 3 : null;
+                    const visible = optionalPosition ? visiblePositions[optionalPosition] : true;
+
+                    if (!visible && optionalPosition) {
+                      return (
+                        <div key={entry.position} className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4">
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">Position {entry.position} omitted</p>
+                            <p className="mt-1 text-xs text-slate-500">This placement will not appear in the poster.</p>
+                          </div>
+                          <Button type="button" variant="outline" size="sm" onClick={() => showEntry(optionalPosition)}>
+                            Add
+                          </Button>
+                        </div>
+                      );
+                    }
+
+                    return (
                     <div key={entry.position} className="rounded-xl border border-slate-200 p-4">
                       <div className="mb-3 flex items-center gap-2">
                         <Badge variant="outline">Position {entry.position}</Badge>
+                        {optionalPosition ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="ml-auto h-7 px-2 text-xs text-slate-500 hover:text-slate-950"
+                            onClick={() => clearEntry(optionalPosition)}
+                          >
+                            Remove
+                          </Button>
+                        ) : null}
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
                         <div className="space-y-1.5 lg:col-span-2">
@@ -626,7 +680,8 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <Button onClick={publish} disabled={saving || !selectedProgram} className="w-full sm:w-auto">

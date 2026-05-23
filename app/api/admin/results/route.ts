@@ -62,8 +62,8 @@ export async function POST(req: NextRequest) {
     if (!input.programId) {
       return NextResponse.json({ error: "Program is required" }, { status: 400 });
     }
-    if (input.entries.some((entry) => !entry.name)) {
-      return NextResponse.json({ error: "Winner names are required" }, { status: 400 });
+    if (!input.entries.some((entry) => entry.position === 1 && entry.name)) {
+      return NextResponse.json({ error: "First position winner is required" }, { status: 400 });
     }
 
     const result = await publishResult(input);
