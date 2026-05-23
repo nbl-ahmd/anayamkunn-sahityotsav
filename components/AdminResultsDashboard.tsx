@@ -226,6 +226,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
   const [publishDragEnabled, setPublishDragEnabled] = useState(true);
   const [templateDraft, setTemplateDraft] = useState<ResultTemplateConfig>(buildFreshTemplate);
   const [activeField, setActiveField] = useState<ResultFieldKey>("competitionName");
+  const [templateLayoutTarget, setTemplateLayoutTarget] = useState<PublishLayoutTarget>("field");
   const [activeMarker, setActiveMarker] = useState<ResultPositionKey>("first");
   const [dragEnabled, setDragEnabled] = useState(true);
   const [adDraft, setAdDraft] = useState<ResultAdConfig>({
@@ -443,6 +444,29 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
     setPublishLayoutDraft(cloneLayout(publishBaseTemplate));
   };
 
+  const templateTargetFields = useMemo(() => {
+    if (templateLayoutTarget === "winnerNames") {
+      return winnerNameFields;
+    }
+    if (templateLayoutTarget === "winnerUnits") {
+      return winnerUnitFields;
+    }
+    return [activeField];
+  }, [activeField, templateLayoutTarget]);
+
+  const patchTemplateTarget = (patch: Partial<ResultTextBox>) => {
+    setTemplateDraft((prev) => ({
+      ...prev,
+      fields: templateTargetFields.reduce((fields, key) => ({
+        ...fields,
+        [key]: {
+          ...fields[key],
+          ...patch,
+        },
+      }), prev.fields),
+    }));
+  };
+
   const onCategoryChange = (nextCategory: string) => {
     setCategory(nextCategory);
     const nextProgram = programs.find((program) => program.categoryGroup === nextCategory);
@@ -612,7 +636,12 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
   const posterUrlForResult = (result: ResultsAdminSnapshot["results"][number]) =>
     `/api/results/${result.id}/poster?templateId=${encodeURIComponent(result.templateId)}&v=${posterRenderVersion}`;
 
-  const field = templateDraft.fields[activeField];
+  const templateLayoutReferenceKey = templateLayoutTarget === "winnerNames"
+    ? "firstName"
+    : templateLayoutTarget === "winnerUnits"
+      ? "firstUnit"
+      : activeField;
+  const field = templateDraft.fields[templateLayoutReferenceKey];
   const marker = templateDraft.positionMarkers[activeMarker];
   const publishLayoutReferenceKey = publishLayoutTarget === "winnerNames"
     ? "firstName"
@@ -639,6 +668,9 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
   }, []);
   const templateScopeOptions = scopeTargets(programs, templateDraft.scopeType);
   const adScopeOptions = scopeTargets(programs, adDraft.scopeType);
+  const templatePreviewAd = adDraft.imageUrl
+    ? adDraft
+    : ads.find((ad) => ad.active && ad.imageUrl) ?? null;
   const metricCards = mode === "publish"
     ? [
         {
@@ -1147,8 +1179,22 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                 <div className="rounded-xl border border-slate-200 p-4">
                   <div className="mb-4 grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
+                      <Label>Adjust</Label>
+                      <Select value={templateLayoutTarget} onValueChange={(value) => setTemplateLayoutTarget(value as PublishLayoutTarget)}>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="field">Selected field</SelectItem>
+                          <SelectItem value="winnerNames">All winner names</SelectItem>
+                          <SelectItem value="winnerUnits">All winner units</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
                       <Label>Field</Label>
-                      <Select value={activeField} onValueChange={(value) => setActiveField(value as ResultFieldKey)}>
+                      <Select value={activeField} onValueChange={(value) => {
+                        setActiveField(value as ResultFieldKey);
+                        setTemplateLayoutTarget("field");
+                      }}>
                         <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {RESULT_FIELD_KEYS.map((key) => <SelectItem key={key} value={key}>{fieldLabels[key]}</SelectItem>)}
@@ -1157,19 +1203,13 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                     </div>
                     <div className="space-y-2">
                       <Label>Color</Label>
-                      <Input type="color" value={field.color} onChange={(event) => setTemplateDraft((prev) => ({ ...prev, fields: { ...prev.fields, [activeField]: { ...field, color: event.target.value } } }))} />
+                      <Input type="color" value={field.color} onChange={(event) => patchTemplateTarget({ color: event.target.value })} />
                     </div>
                     <div className="space-y-2">
                       <Label>Font Family</Label>
                       <Select
                         value={field.fontFamily}
-                        onValueChange={(value) => setTemplateDraft((prev) => ({
-                          ...prev,
-                          fields: {
-                            ...prev.fields,
-                            [activeField]: { ...field, fontFamily: value },
-                          },
-                        }))}
+                        onValueChange={(value) => patchTemplateTarget({ fontFamily: value })}
                       >
                         <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -1201,35 +1241,29 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                           type="number"
                           step="0.5"
                           value={Math.round(field[key] * 1000) / 10}
-                          onChange={(event) => setTemplateDraft((prev) => ({
-                            ...prev,
-                            fields: {
-                              ...prev.fields,
-                              [activeField]: { ...field, [key]: Number(event.target.value) / 100 },
-                            },
-                          }))}
+                          onChange={(event) => patchTemplateTarget({ [key]: Number(event.target.value) / 100 })}
                         />
                       </div>
                     ))}
                     <div className="space-y-1.5">
                       <Label>Font</Label>
-                      <Input type="number" value={field.fontSize} onChange={(event) => setTemplateDraft((prev) => ({ ...prev, fields: { ...prev.fields, [activeField]: { ...field, fontSize: Number(event.target.value) } } }))} />
+                      <Input type="number" value={field.fontSize} onChange={(event) => patchTemplateTarget({ fontSize: Number(event.target.value) })} />
                     </div>
                     <div className="space-y-1.5">
                       <Label>Min Font</Label>
-                      <Input type="number" value={field.minFontSize} onChange={(event) => setTemplateDraft((prev) => ({ ...prev, fields: { ...prev.fields, [activeField]: { ...field, minFontSize: Number(event.target.value) } } }))} />
+                      <Input type="number" value={field.minFontSize} onChange={(event) => patchTemplateTarget({ minFontSize: Number(event.target.value) })} />
                     </div>
                     <div className="space-y-1.5">
                       <Label>Weight</Label>
-                      <Input type="number" step="100" value={field.fontWeight} onChange={(event) => setTemplateDraft((prev) => ({ ...prev, fields: { ...prev.fields, [activeField]: { ...field, fontWeight: Number(event.target.value) } } }))} />
+                      <Input type="number" step="100" value={field.fontWeight} onChange={(event) => patchTemplateTarget({ fontWeight: Number(event.target.value) })} />
                     </div>
                     <div className="space-y-1.5">
                       <Label>Line Height</Label>
-                      <Input type="number" step="0.05" value={field.lineHeight} onChange={(event) => setTemplateDraft((prev) => ({ ...prev, fields: { ...prev.fields, [activeField]: { ...field, lineHeight: Number(event.target.value) } } }))} />
+                      <Input type="number" step="0.05" value={field.lineHeight} onChange={(event) => patchTemplateTarget({ lineHeight: Number(event.target.value) })} />
                     </div>
                     <div className="space-y-1.5">
                       <Label>Align</Label>
-                      <Select value={field.textAlign} onValueChange={(value) => setTemplateDraft((prev) => ({ ...prev, fields: { ...prev.fields, [activeField]: { ...field, textAlign: value as typeof field.textAlign } } }))}>
+                      <Select value={field.textAlign} onValueChange={(value) => patchTemplateTarget({ textAlign: value as typeof field.textAlign })}>
                         <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="left">Left</SelectItem>
@@ -1240,7 +1274,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                     </div>
                     <div className="space-y-1.5">
                       <Label>Vertical</Label>
-                      <Select value={field.verticalAlign} onValueChange={(value) => setTemplateDraft((prev) => ({ ...prev, fields: { ...prev.fields, [activeField]: { ...field, verticalAlign: value as typeof field.verticalAlign } } }))}>
+                      <Select value={field.verticalAlign} onValueChange={(value) => patchTemplateTarget({ verticalAlign: value as typeof field.verticalAlign })}>
                         <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="top">Top</SelectItem>
@@ -1520,6 +1554,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                 <ResultPosterPreview
                   template={templateDraft}
                   values={previewValues}
+                  ad={templatePreviewAd}
                   editable
                   dragEnabled={dragEnabled}
                   activeField={activeField}
