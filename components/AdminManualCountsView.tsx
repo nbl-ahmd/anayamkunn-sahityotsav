@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Save } from "lucide-react";
+import { Calculator, RotateCcw, Save, TrendingUp, Users } from "lucide-react";
 import { UNIT_LIST } from "@/lib/constants";
 import { LeaderboardSnapshot, ManualUnitCountMap } from "@/lib/types";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { AdminMetricCard } from "@/components/admin/AdminMetricCard";
+import { AdminPanel } from "@/components/admin/AdminPanel";
 
 function zeroCounts(): ManualUnitCountMap {
   return Object.fromEntries(UNIT_LIST.map((unit) => [unit, 0])) as ManualUnitCountMap;
@@ -67,6 +68,16 @@ export function AdminManualCountsView() {
     () => Object.values(manualUnitCounts).reduce((sum, value) => sum + value, 0),
     [manualUnitCounts],
   );
+  const totalLive = useMemo(
+    () => leaderboard?.liveUnitTotals.reduce((sum, value) => sum + value.count, 0) ?? 0,
+    [leaderboard],
+  );
+  const highestManual = useMemo(
+    () =>
+      UNIT_LIST.map((unit) => ({ unit, count: manualUnitCounts[unit] ?? 0 }))
+        .sort((left, right) => right.count - left.count || left.unit.localeCompare(right.unit))[0],
+    [manualUnitCounts],
+  );
 
   const saveManualCounts = async () => {
     setSaving(true);
@@ -103,32 +114,54 @@ export function AdminManualCountsView() {
   return (
     <div className="space-y-6">
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Card className="border-slate-200 bg-white shadow-sm">
-          <CardContent className="p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Manual Added</p>
-            <p className="mt-4 text-3xl font-semibold tracking-tight text-slate-900">{totalManual}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200 bg-white shadow-sm sm:col-span-2">
-          <CardContent className="p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Total (Live + Manual)</p>
-            <p className="mt-4 text-3xl font-semibold tracking-tight text-slate-900">{leaderboard?.total ?? 0}</p>
-          </CardContent>
-        </Card>
+        <AdminMetricCard
+          label="Manual Added"
+          value={totalManual}
+          detail="Offline or missed frame counts"
+          icon={Calculator}
+          tone="amber"
+        />
+        <AdminMetricCard
+          label="Live Records"
+          value={totalLive}
+          detail="Generated from public frame flows"
+          icon={TrendingUp}
+          tone="sky"
+        />
+        <AdminMetricCard
+          label="Top Manual Unit"
+          value={highestManual?.count ?? 0}
+          detail={highestManual?.unit ?? "No unit yet"}
+          icon={Users}
+          tone="emerald"
+        />
       </section>
 
-      <Card className="overflow-hidden border-slate-200 bg-white shadow-sm">
-        <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-4">
-          <CardTitle className="text-lg font-semibold text-slate-900">Manual Unit Count Adjustments</CardTitle>
-          <CardDescription>
-            Add counts from offline or missed events so leaderboard and frame numbering stay correct.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 p-4 sm:p-5">
+      <AdminPanel
+        title="Manual Unit Count Adjustments"
+        description="Add counts from offline or missed events so leaderboard and frame numbering stay correct."
+        icon={Calculator}
+        action={
+          <Button onClick={saveManualCounts} disabled={saving} className="gap-2">
+            {saving ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {saving ? "Updating..." : "Save Counts"}
+          </Button>
+        }
+      >
+        <div className="space-y-5">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {UNIT_LIST.map((unit) => (
-              <div key={unit} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-                <Label className="mb-2 block text-sm font-semibold text-slate-700">{unit}</Label>
+              <div key={unit} className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <Label className="block text-sm font-black text-slate-800">{unit}</Label>
+                  <span className="text-xs font-semibold text-slate-500">
+                    Live {leaderboard?.liveUnitTotals.find((item) => item.unit === unit)?.count ?? 0}
+                  </span>
+                </div>
                 <Input
                   type="number"
                   min={0}
@@ -141,12 +174,17 @@ export function AdminManualCountsView() {
             ))}
           </div>
 
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex flex-col gap-2 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-500">
+              Combined total: <span className="font-bold text-slate-950">{leaderboard?.total ?? totalManual + totalLive}</span>
+            </p>
+            <div className="flex items-center justify-end gap-2">
             <Button
               variant="outline"
               onClick={() => setManualUnitCounts(zeroCounts())}
               disabled={saving}
             >
+              <RotateCcw className="h-4 w-4" />
               Reset
             </Button>
             <Button onClick={saveManualCounts} disabled={saving} className="gap-2">
@@ -157,9 +195,10 @@ export function AdminManualCountsView() {
               )}
               {saving ? "Updating..." : "Update Unit Counts"}
             </Button>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </AdminPanel>
     </div>
   );
 }

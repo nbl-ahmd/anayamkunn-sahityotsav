@@ -1,10 +1,10 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { AdminResultsDashboard } from "@/components/AdminResultsDashboard";
 import { AdminShell } from "@/components/AdminShell";
-import { AdminOverviewDashboard } from "@/components/AdminOverviewDashboard";
 import { ADMIN_SESSION_COOKIE_NAME, isValidAdminSessionToken } from "@/lib/admin-auth";
 
-export default async function AdminPage() {
+export default async function AdminResultsPage() {
   const cookieStore = await cookies();
   const token = cookieStore.get(ADMIN_SESSION_COOKIE_NAME)?.value;
 
@@ -14,10 +14,10 @@ export default async function AdminPage() {
 
   return (
     <AdminShell
-      title="Admin Overview"
-      subtitle="Operational dashboard for result publishing, frame activity, templates, and event settings."
+      title="Results Dashboard"
+      subtitle="Publish official results, configure poster templates, and assign sponsor ads."
     >
-      <AdminOverviewDashboard />
+      <AdminResultsDashboard />
     </AdminShell>
   );
 }

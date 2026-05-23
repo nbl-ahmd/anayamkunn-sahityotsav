@@ -12,6 +12,7 @@ import { copyToClipboard, fileToDataUrl } from "@/lib/client-utils";
 import { LeaderboardSnapshot, TemplateConfig, TextLayout } from "@/lib/types";
 import { FrameCanvas } from "@/components/FrameCanvas";
 import { FrameUploader } from "@/components/FrameUploader";
+import { AdminMetricCard } from "@/components/admin/AdminMetricCard";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +34,6 @@ import {
   Crown,
   Layers,
   ExternalLink,
-  CheckCircle2,
   AlertCircle,
   Wand2,
 } from "lucide-react";
@@ -360,76 +360,34 @@ export function AdminDashboard() {
   return (
     <div className="flex flex-col gap-6 pb-10 xl:gap-8">
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="border-slate-200/80 bg-white shadow-sm">
-          <CardContent className="p-5 sm:p-6">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Photos Framed</p>
-              <div className="rounded-xl bg-indigo-50 p-2 text-indigo-600">
-                <BarChart3 className="h-4 w-4" />
-              </div>
-            </div>
-            <p className="mt-5 text-3xl font-semibold tracking-tight text-slate-900">{totalFramed}</p>
-            <p className="mt-1 text-xs text-slate-500">Total generated framed photos</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200/80 bg-white shadow-sm">
-          <CardContent className="p-5 sm:p-6">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Active Units</p>
-              <div className="rounded-xl bg-emerald-50 p-2 text-emerald-600">
-                <Users className="h-4 w-4" />
-              </div>
-            </div>
-            <p className="mt-5 text-3xl font-semibold tracking-tight text-slate-900">{activeUnits}</p>
-            <p className="mt-1 text-xs text-slate-500">Units with at least one framed post</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200/80 bg-white shadow-sm">
-          <CardContent className="p-5 sm:p-6">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Leading Unit</p>
-              <div className="rounded-xl bg-amber-50 p-2 text-amber-600">
-                <Crown className="h-4 w-4" />
-              </div>
-            </div>
-            {topUnit ? (
-              <>
-                <p className="mt-5 truncate text-3xl font-semibold tracking-tight text-slate-900">{topUnit.unit}</p>
-                <p className="mt-1 text-xs text-slate-500">{topUnit.count} framed photo(s)</p>
-              </>
-            ) : (
-              <>
-                <p className="mt-5 text-2xl font-semibold tracking-tight text-slate-400">No activity</p>
-                <p className="mt-1 text-xs text-slate-500">Waiting for first framed upload</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200/80 bg-white shadow-sm">
-          <CardContent className="p-5 sm:p-6">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Frames Uploaded</p>
-              <div className="rounded-xl bg-sky-50 p-2 text-sky-600">
-                <Layers className="h-4 w-4" />
-              </div>
-            </div>
-            <p className="mt-5 text-3xl font-semibold tracking-tight text-slate-900">{frameCount}</p>
-            {frameCount > 0 ? (
-              <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                Template variants ready to publish
-              </p>
-            ) : (
-              <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-                <AlertCircle className="h-3.5 w-3.5 text-amber-600" />
-                Upload at least one frame to go live
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <AdminMetricCard
+          label="Photos Framed"
+          value={totalFramed}
+          detail="Total generated framed photos"
+          icon={BarChart3}
+          tone="sky"
+        />
+        <AdminMetricCard
+          label="Active Units"
+          value={activeUnits}
+          detail="Units with at least one framed post"
+          icon={Users}
+          tone="emerald"
+        />
+        <AdminMetricCard
+          label="Leading Unit"
+          value={topUnit?.unit ?? "No activity"}
+          detail={topUnit ? `${topUnit.count} framed photo(s)` : "Waiting for first framed upload"}
+          icon={Crown}
+          tone="amber"
+        />
+        <AdminMetricCard
+          label="Frames Uploaded"
+          value={frameCount}
+          detail={frameCount > 0 ? "Template variants ready to publish" : "Upload at least one frame to go live"}
+          icon={Layers}
+          tone={frameCount > 0 ? "violet" : "rose"}
+        />
       </section>
 
       <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -536,6 +494,7 @@ export function AdminDashboard() {
                               className="hover:bg-white hover:text-slate-900"
                               onClick={() => moveFrame(index, index - 1)}
                               disabled={index === 0}
+                              aria-label={`Move ${frame.name} up`}
                             >
                               <ArrowUp className="h-3.5 w-3.5" />
                             </Button>
@@ -545,6 +504,7 @@ export function AdminDashboard() {
                               className="hover:bg-white hover:text-slate-900"
                               onClick={() => moveFrame(index, index + 1)}
                               disabled={index === template.frames.length - 1}
+                              aria-label={`Move ${frame.name} down`}
                             >
                               <ArrowDown className="h-3.5 w-3.5" />
                             </Button>
@@ -554,6 +514,7 @@ export function AdminDashboard() {
                               size="icon-sm"
                               className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                               onClick={() => removeFrame(frame.id)}
+                              aria-label={`Remove ${frame.name}`}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>

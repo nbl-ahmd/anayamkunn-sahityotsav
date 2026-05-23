@@ -1,13 +1,14 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { CalendarDays, Save } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CalendarDays, Clock, Save, Settings2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { AppSettings } from "@/lib/types";
 import { toast } from "sonner";
+import { AdminPanel } from "@/components/admin/AdminPanel";
+import { AdminMetricCard } from "@/components/admin/AdminMetricCard";
 
 function toDatetimeLocalValue(value: string | null): string {
   if (!value) {
@@ -82,18 +83,32 @@ export function AdminSettingsView() {
     }
   };
 
+  const dateLabel = sahithyolsavDate ? new Date(sahithyolsavDate).toLocaleString("en-IN") : "Not set";
+
   return (
-    <Card className="overflow-hidden border-slate-200 bg-white shadow-sm">
-      <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-4">
-        <CardTitle className="flex items-center gap-2 text-lg font-semibold text-slate-900">
-          <CalendarDays className="h-5 w-5 text-primary" />
-          Sahithyolsav Countdown Date
-        </CardTitle>
-        <CardDescription>
-          Set the target date and time used by the homepage countdown.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="p-5">
+    <div className="space-y-6">
+      <section className="grid gap-4 sm:grid-cols-2">
+        <AdminMetricCard
+          label="Countdown"
+          value={sahithyolsavDate ? "Active" : "Hidden"}
+          detail={dateLabel}
+          icon={Clock}
+          tone={sahithyolsavDate ? "emerald" : "amber"}
+        />
+        <AdminMetricCard
+          label="Scope"
+          value="Global"
+          detail="Applies to public homepage countdown"
+          icon={Settings2}
+          tone="sky"
+        />
+      </section>
+
+      <AdminPanel
+        title="Sahithyolsav Countdown Date"
+        description="Set the target date and time used by the homepage countdown."
+        icon={CalendarDays}
+      >
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="sahithyolsav-date">Event date and time</Label>
@@ -108,7 +123,10 @@ export function AdminSettingsView() {
             </p>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex flex-col gap-2 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-500">
+              Current value: <span className="font-semibold text-slate-900">{dateLabel}</span>
+            </p>
             <Button type="submit" disabled={saving} className="gap-2">
               {saving ? (
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
@@ -119,7 +137,7 @@ export function AdminSettingsView() {
             </Button>
           </div>
         </form>
-      </CardContent>
-    </Card>
+      </AdminPanel>
+    </div>
   );
 }

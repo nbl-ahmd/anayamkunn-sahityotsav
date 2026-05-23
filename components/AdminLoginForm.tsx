@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Loader2, LockKeyhole, ShieldCheck } from "lucide-react";
 
 export function AdminLoginForm() {
   const router = useRouter();
@@ -43,14 +44,17 @@ export function AdminLoginForm() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md py-10">
-      <Card className="border-slate-200 shadow-sm">
-        <CardHeader>
-          <CardTitle>Admin Login</CardTitle>
-          <CardDescription>Enter your credentials to access the dashboard.</CardDescription>
+    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-10">
+      <Card className="w-full max-w-md overflow-hidden border-slate-200 bg-white shadow-sm">
+        <CardHeader className="border-b border-slate-100 bg-slate-50/80">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-950 text-white shadow-sm">
+            <ShieldCheck className="h-5 w-5" />
+          </div>
+          <CardTitle className="text-2xl font-black tracking-tight text-slate-950">Admin Center</CardTitle>
+          <CardDescription>Sign in to manage frames, results, ads, and event settings.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="space-y-4" onSubmit={onSubmit}>
+          <form className="space-y-4 pt-6" onSubmit={onSubmit}>
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
               <Input
@@ -76,7 +80,8 @@ export function AdminLoginForm() {
 
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
-            <Button type="submit" className="w-full" disabled={submitting}>
+            <Button type="submit" className="w-full gap-2" disabled={submitting}>
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
               {submitting ? "Signing in..." : "Sign in"}
             </Button>
           </form>
