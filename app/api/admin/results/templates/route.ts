@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_SESSION_COOKIE_NAME, isValidAdminSessionToken } from "@/lib/admin-auth";
 import { RESULT_PROGRAMS } from "@/lib/result-programs";
 import { buildDefaultResultTemplate } from "@/lib/results-defaults";
+import { normalizePositionMarkers } from "@/lib/results-layout";
 import { saveResultTemplate } from "@/lib/results-store";
 import {
   RESULT_FIELD_KEYS,
@@ -125,6 +126,11 @@ export async function POST(req: NextRequest) {
         ...fields,
         [key]: normalizeTextBox(body.fields?.[key], defaults.fields[key]),
       }), defaults.fields),
+      positionMarkers: normalizePositionMarkers(
+        body.positionMarkers,
+        defaults.positionMarkers,
+        normalizeTextBox,
+      ),
       active: body.active ?? true,
     };
 

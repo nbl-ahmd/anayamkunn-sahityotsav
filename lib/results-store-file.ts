@@ -4,17 +4,24 @@ import path from "node:path";
 import { RESULT_PROGRAMS, getResultProgram } from "@/lib/result-programs";
 import { persistGeneratedResultPoster } from "@/lib/results-assets";
 import { buildDefaultResultTemplate, DEFAULT_RESULT_TEMPLATE_ID } from "@/lib/results-defaults";
+import {
+  applyLayoutOverride,
+  markerDefaultsFromFields,
+  normalizeLayoutOverride,
+  normalizePositionMarkers,
+} from "@/lib/results-layout";
 import { renderResultPoster } from "@/lib/results-renderer";
 import {
   PublishResultInput,
   PublishedResult,
   ResultAdConfig,
   ResultEntry,
+  ResultLayoutOverride,
   ResultsAdminSnapshot,
   ResultsPublicSnapshot,
   ResultStoreData,
   ResultTemplateConfig,
-  ResultTemplateFields,
+  ResultTextBox,
   SaveResultAdInput,
   SaveResultTemplateInput,
 } from "@/lib/results-types";
@@ -37,6 +44,13 @@ function createInitialStore(): ResultStoreData {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function normalizeTextBox(input: Partial<ResultTextBox> | undefined, fallback: ResultTextBox): ResultTextBox {
+  return {
+    ...fallback,
+    ...(isObject(input) ? input : {}),
+  };
 }
 
 function normalizeStore(input: Partial<ResultStoreData> | null | undefined): ResultStoreData {
@@ -126,34 +140,23 @@ function normalizeTemplate(input: unknown): ResultTemplateConfig {
       ...defaults.fields,
       ...(isObject(template.fields) ? template.fields : {}),
     },
+    positionMarkers: normalizePositionMarkers(
+      template.positionMarkers,
+      markerDefaultsFromFields({
+        ...defaults.fields,
+        ...(isObject(template.fields) ? template.fields : {}),
+      }),
+      normalizeTextBox,
+    ),
     active: template.active ?? true,
     createdAt: validIso(template.createdAt) ?? new Date().toISOString(),
     updatedAt: validIso(template.updatedAt) ?? new Date().toISOString(),
   };
 }
 
-function normalizeLayoutOverride(input: unknown): ResultTemplateFields | null {
-  if (!isObject(input)) {
-    return null;
-  }
+function normalizeStoredLayoutOverride(input: unknown): ResultLayoutOverride | null {
   const defaults = buildDefaultResultTemplate();
-  return {
-    ...defaults.fields,
-    ...input,
-  } as ResultTemplateFields;
-}
-
-function applyLayoutOverride(template: ResultTemplateConfig, override: ResultTemplateFields | null): ResultTemplateConfig {
-  if (!override) {
-    return template;
-  }
-  return {
-    ...template,
-    fields: {
-      ...template.fields,
-      ...override,
-    },
-  };
+  return normalizeLayoutOverride(input, defaults.fields, defaults.positionMarkers);
 }
 
 function normalizeAd(input: unknown): ResultAdConfig | null {
@@ -204,7 +207,7 @@ function normalizeResult(input: unknown): PublishedResult | null {
     resultNumber: Math.max(1, Math.floor(Number(result.resultNumber))),
     entries: normalizeEntries(result.entries),
     templateId: typeof result.templateId === "string" && result.templateId ? result.templateId : DEFAULT_RESULT_TEMPLATE_ID,
-    layoutOverride: normalizeLayoutOverride(result.layoutOverride),
+    layoutOverride: normalizeStoredLayoutOverride(result.layoutOverride),
     adId: typeof result.adId === "string" && result.adId ? result.adId : null,
     posterImageUrl: result.posterImageUrl,
     status: "published",
@@ -397,7 +400,11 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
       resultNumber,
       entries,
       templateId: template.id,
-      layoutOverride: normalizeLayoutOverride(input.layoutOverride),
+      layoutOverride: normalizeLayoutOverride(
+        input.layoutOverride,
+        template.fields,
+        template.positionMarkers,
+      ),
       adId: ad?.id ?? null,
       posterImageUrl: existing?.posterImageUrl ?? "",
       status: "published",

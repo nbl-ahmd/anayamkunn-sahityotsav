@@ -5,16 +5,23 @@ import { UnitName } from "@/lib/types";
 import { RESULT_PROGRAMS, getPublicCompetitionName, getResultProgram } from "@/lib/result-programs";
 import { persistGeneratedResultPoster } from "@/lib/results-assets";
 import { buildDefaultResultTemplate, DEFAULT_RESULT_TEMPLATE_ID } from "@/lib/results-defaults";
+import {
+  applyLayoutOverride,
+  markerDefaultsFromFields,
+  normalizeLayoutOverride,
+  normalizePositionMarkers,
+} from "@/lib/results-layout";
 import { renderResultPoster } from "@/lib/results-renderer";
 import {
   PublishResultInput,
   PublishedResult,
   ResultAdConfig,
   ResultEntry,
+  ResultLayoutOverride,
   ResultsAdminSnapshot,
   ResultsPublicSnapshot,
   ResultTemplateConfig,
-  ResultTemplateFields,
+  ResultTextBox,
   SaveResultAdInput,
   SaveResultTemplateInput,
 } from "@/lib/results-types";
@@ -27,6 +34,7 @@ type TemplateRow = {
   background_image: string | null;
   size: unknown;
   fields: unknown;
+  position_markers?: unknown;
   result_number_format?: string | null;
   active: boolean;
   created_at: string | Date;
@@ -85,28 +93,20 @@ function normalizeUnit(value: unknown): UnitName {
   return UNIT_LIST.includes(value as UnitName) ? value as UnitName : UNIT_LIST[0];
 }
 
-function normalizeLayoutOverride(input: unknown): ResultTemplateFields | null {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    return null;
-  }
-  const defaults = buildDefaultResultTemplate();
-  return {
-    ...defaults.fields,
-    ...input,
-  } as ResultTemplateFields;
+function isObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-function applyLayoutOverride(template: ResultTemplateConfig, override: ResultTemplateFields | null): ResultTemplateConfig {
-  if (!override) {
-    return template;
-  }
+function normalizeTextBox(input: Partial<ResultTextBox> | undefined, fallback: ResultTextBox): ResultTextBox {
   return {
-    ...template,
-    fields: {
-      ...template.fields,
-      ...override,
-    },
+    ...fallback,
+    ...(isObject(input) ? input : {}),
   };
+}
+
+function normalizeStoredLayoutOverride(input: unknown): ResultLayoutOverride | null {
+  const defaults = buildDefaultResultTemplate();
+  return normalizeLayoutOverride(input, defaults.fields, defaults.positionMarkers);
 }
 
 async function ensureSchema(): Promise<void> {
@@ -127,6 +127,7 @@ async function ensureSchema(): Promise<void> {
         background_image TEXT,
         size JSONB NOT NULL,
         fields JSONB NOT NULL,
+        position_markers JSONB,
         result_number_format TEXT,
         active BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMPTZ NOT NULL,
@@ -137,6 +138,11 @@ async function ensureSchema(): Promise<void> {
     await sql`
       ALTER TABLE result_templates
       ADD COLUMN IF NOT EXISTS result_number_format TEXT;
+    `;
+
+    await sql`
+      ALTER TABLE result_templates
+      ADD COLUMN IF NOT EXISTS position_markers JSONB;
     `;
 
     await sql`
@@ -206,6 +212,7 @@ async function ensureSchema(): Promise<void> {
         background_image,
         size,
         fields,
+        position_markers,
         result_number_format,
         active,
         created_at,
@@ -218,6 +225,7 @@ async function ensureSchema(): Promise<void> {
         ${defaultTemplate.backgroundImage},
         ${JSON.stringify(defaultTemplate.size)}::jsonb,
         ${JSON.stringify(defaultTemplate.fields)}::jsonb,
+        ${JSON.stringify(defaultTemplate.positionMarkers)}::jsonb,
         ${defaultTemplate.resultNumberFormat},
         ${defaultTemplate.active},
         ${defaultTemplate.createdAt},
@@ -252,6 +260,10 @@ function normalizeEntries(entries: unknown): ResultEntry[] {
 
 function rowToTemplate(row: TemplateRow): ResultTemplateConfig {
   const defaults = buildDefaultResultTemplate();
+  const fields = {
+    ...defaults.fields,
+    ...parseJson(row.fields, defaults.fields),
+  };
   return {
     id: row.id,
     name: row.name,
@@ -265,10 +277,12 @@ function rowToTemplate(row: TemplateRow): ResultTemplateConfig {
       ...defaults.size,
       ...parseJson(row.size, defaults.size),
     },
-    fields: {
-      ...defaults.fields,
-      ...parseJson(row.fields, defaults.fields),
-    },
+    fields,
+    positionMarkers: normalizePositionMarkers(
+      row.position_markers,
+      markerDefaultsFromFields(fields),
+      normalizeTextBox,
+    ),
     resultNumberFormat:
       row.result_number_format === "number" || row.result_number_format === "label"
         ? row.result_number_format
@@ -311,7 +325,7 @@ function rowToResult(row: ResultRow): PublishedResult | null {
     resultNumber: Number(row.result_number),
     entries: normalizeEntries(row.entries),
     templateId: row.template_id,
-    layoutOverride: normalizeLayoutOverride(row.layout_override),
+    layoutOverride: normalizeStoredLayoutOverride(row.layout_override),
     adId: row.ad_id,
     posterImageUrl: row.poster_image_url,
     status: "published",
@@ -460,6 +474,7 @@ export async function saveResultTemplate(input: SaveResultTemplateInput): Promis
       background_image,
       size,
       fields,
+      position_markers,
       result_number_format,
       active,
       created_at,
@@ -472,6 +487,7 @@ export async function saveResultTemplate(input: SaveResultTemplateInput): Promis
       ${template.backgroundImage},
       ${JSON.stringify(template.size)}::jsonb,
       ${JSON.stringify(template.fields)}::jsonb,
+      ${JSON.stringify(template.positionMarkers)}::jsonb,
       ${template.resultNumberFormat},
       ${template.active},
       ${template.createdAt},
@@ -485,6 +501,7 @@ export async function saveResultTemplate(input: SaveResultTemplateInput): Promis
       background_image = EXCLUDED.background_image,
       size = EXCLUDED.size,
       fields = EXCLUDED.fields,
+      position_markers = EXCLUDED.position_markers,
       result_number_format = EXCLUDED.result_number_format,
       active = EXCLUDED.active,
       updated_at = EXCLUDED.updated_at
@@ -595,7 +612,11 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
     resultNumber,
     entries,
     templateId: template.id,
-    layoutOverride: normalizeLayoutOverride(input.layoutOverride),
+    layoutOverride: normalizeLayoutOverride(
+      input.layoutOverride,
+      template.fields,
+      template.positionMarkers,
+    ),
     adId: ad?.id ?? null,
     posterImageUrl: existing?.posterImageUrl ?? "",
     status: "published",

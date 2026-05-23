@@ -3,10 +3,13 @@ import path from "node:path";
 import sharp from "sharp";
 import TextToSVG from "text-to-svg";
 import { getPublicCompetitionName } from "@/lib/result-programs";
+import { markerDefaultsFromFields } from "@/lib/results-layout";
 import {
   RESULT_FIELD_KEYS,
+  RESULT_POSITION_KEYS,
   ResultAdConfig,
   ResultFieldKey,
+  ResultPositionMarker,
   PublishedResult,
   ResultTemplateConfig,
   ResultTextBox,
@@ -62,6 +65,10 @@ function safeSvgColor(color: string): string {
   return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(color)
     ? color
     : "#111827";
+}
+
+function safeOpacity(value: number): number {
+  return clamp(Number.isFinite(value) ? value : 1, 0, 1);
 }
 
 async function loadImageBuffer(imageRef: string): Promise<Buffer> {
@@ -273,6 +280,59 @@ function renderTextElement(
     <g clip-path="url(#${clipId})">${pathLines}</g>`;
 }
 
+async function renderMarkerElement(
+  marker: ResultPositionMarker,
+  outputWidth: number,
+  outputHeight: number,
+  clipIndex: number,
+): Promise<string> {
+  if (marker.mode === "hidden") {
+    return "";
+  }
+
+  if (marker.mode === "text") {
+    return renderTextElement(marker.text, marker.box, outputWidth, outputHeight, clipIndex);
+  }
+
+  if (marker.mode === "image") {
+    if (!marker.imageUrl.trim()) {
+      return "";
+    }
+    const left = Math.round(outputWidth * clamp(marker.x, 0, 0.98));
+    const top = Math.round(outputHeight * clamp(marker.y, 0, 0.98));
+    const width = Math.max(1, Math.round(outputWidth * clamp(marker.width, 0.005, 1)));
+    const height = Math.max(1, Math.round(outputHeight * clamp(marker.height, 0.005, 1)));
+    const cx = left + width / 2;
+    const cy = top + height / 2;
+    return `<image x="${left}" y="${top}" width="${width}" height="${height}" opacity="${safeOpacity(marker.opacity)}" transform="rotate(0 ${cx} ${cy})" preserveAspectRatio="xMidYMid meet" href="${await imageToDataUri(marker.imageUrl)}" />`;
+  }
+
+  const itemWidth = Math.max(1, Math.round(outputWidth * clamp(marker.width, 0.005, 1)));
+  const itemHeight = Math.max(1, Math.round(outputHeight * clamp(marker.height, 0.005, 1)));
+  const gap = marker.direction === "vertical"
+    ? Math.round(outputHeight * clamp(marker.gap, 0, 0.2))
+    : Math.round(outputWidth * clamp(marker.gap, 0, 0.2));
+  const left = Math.round(outputWidth * clamp(marker.x, 0, 0.98));
+  const top = Math.round(outputHeight * clamp(marker.y, 0, 0.98));
+  const repeat = clamp(Math.round(marker.repeat), 1, 12);
+  const groupWidth = marker.direction === "horizontal" ? repeat * itemWidth + (repeat - 1) * gap : itemWidth;
+  const groupHeight = marker.direction === "vertical" ? repeat * itemHeight + (repeat - 1) * gap : itemHeight;
+  const cx = left + groupWidth / 2;
+  const cy = top + groupHeight / 2;
+  const shapes = Array.from({ length: repeat }, (_, index) => {
+    const x = left + (marker.direction === "horizontal" ? index * (itemWidth + gap) : 0);
+    const y = top + (marker.direction === "vertical" ? index * (itemHeight + gap) : 0);
+    const fill = safeSvgColor(marker.colors[index % marker.colors.length] ?? "#f43f5e");
+    if (marker.shape === "circle") {
+      return `<circle cx="${x + itemWidth / 2}" cy="${y + itemHeight / 2}" r="${Math.min(itemWidth, itemHeight) / 2}" fill="${fill}" />`;
+    }
+    const rx = marker.shape === "roundedSquare" ? Math.min(itemWidth, itemHeight) * 0.18 : 0;
+    return `<rect x="${x}" y="${y}" width="${itemWidth}" height="${itemHeight}" rx="${rx}" fill="${fill}" />`;
+  }).join("");
+
+  return `<g opacity="${safeOpacity(marker.opacity)}" transform="rotate(${clamp(marker.rotation, -180, 180)} ${cx} ${cy})">${shapes}</g>`;
+}
+
 export async function renderResultPoster(
   result: PublishedResult,
   template: ResultTemplateConfig,
@@ -289,7 +349,19 @@ export async function renderResultPoster(
     ? `<rect x="0" y="${posterHeight}" width="${width}" height="${adHeight}" fill="#ffffff" />
        <image x="0" y="${posterHeight}" width="${width}" height="${adHeight}" preserveAspectRatio="xMidYMid meet" href="${await imageToDataUri(ad.imageUrl)}" />`
     : "";
+  const byPosition = new Map(result.entries.map((entry) => [entry.position, entry]));
+  const positionMarkers = template.positionMarkers ?? markerDefaultsFromFields(template.fields);
+  const markerElements = (await Promise.all(RESULT_POSITION_KEYS.map((key, index) => {
+    const position = key === "first" ? 1 : key === "second" ? 2 : 3;
+    const entry = byPosition.get(position);
+    if (!entry?.name.trim()) {
+      return "";
+    }
+    return renderMarkerElement(positionMarkers[key], width, posterHeight, index + 100);
+  }))).join("");
+  const positionFieldKeys = new Set<ResultFieldKey>(["firstPosition", "secondPosition", "thirdPosition"]);
   const textElements = RESULT_FIELD_KEYS
+    .filter((key) => !positionFieldKeys.has(key))
     .map((key, index) =>
       renderTextElement(values[key] ?? "", template.fields[key], width, posterHeight, index),
     )
@@ -298,6 +370,7 @@ export async function renderResultPoster(
   const svg = Buffer.from(`
     <svg width="${width}" height="${outputHeight}" viewBox="0 0 ${width} ${outputHeight}" xmlns="http://www.w3.org/2000/svg">
       ${backgroundLayer}
+      ${markerElements}
       ${textElements}
       ${adLayer}
     </svg>`);

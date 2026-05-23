@@ -1,7 +1,10 @@
 import {
   RESULT_FIELD_KEYS,
+  RESULT_POSITION_KEYS,
   ResultFieldKey,
+  ResultPositionKey,
   ResultTemplateConfig,
+  ResultTemplatePositionMarkers,
   ResultTextBox,
 } from "@/lib/results-types";
 
@@ -160,6 +163,63 @@ const defaultFields: Record<ResultFieldKey, ResultTextBox> = {
   }),
 };
 
+const positionFieldKeys: Record<ResultPositionKey, ResultFieldKey> = {
+  first: "firstPosition",
+  second: "secondPosition",
+  third: "thirdPosition",
+};
+
+const positionLabels: Record<ResultPositionKey, string> = {
+  first: "1",
+  second: "2",
+  third: "3",
+};
+
+export function buildTextPositionMarkers(fields: Record<ResultFieldKey, ResultTextBox>): ResultTemplatePositionMarkers {
+  return RESULT_POSITION_KEYS.reduce(
+    (markers, key) => ({
+      ...markers,
+      [key]: {
+        mode: "text",
+        visible: true,
+        text: positionLabels[key],
+        box: { ...fields[positionFieldKeys[key]] },
+      },
+    }),
+    {} as ResultTemplatePositionMarkers,
+  );
+}
+
+const defaultPositionMarkers: ResultTemplatePositionMarkers = buildTextPositionMarkers(defaultFields);
+
+export function clonePositionMarkers(markers: ResultTemplatePositionMarkers): ResultTemplatePositionMarkers {
+  return RESULT_POSITION_KEYS.reduce((next, key) => {
+    const marker = markers[key];
+    if (marker.mode === "text") {
+      return {
+        ...next,
+        [key]: {
+          ...marker,
+          box: { ...marker.box },
+        },
+      };
+    }
+    if (marker.mode === "shape") {
+      return {
+        ...next,
+        [key]: {
+          ...marker,
+          colors: [...marker.colors],
+        },
+      };
+    }
+    return {
+      ...next,
+      [key]: { ...marker },
+    };
+  }, {} as ResultTemplatePositionMarkers);
+}
+
 export function buildDefaultResultTemplate(): ResultTemplateConfig {
   const now = new Date().toISOString();
   return {
@@ -180,6 +240,7 @@ export function buildDefaultResultTemplate(): ResultTemplateConfig {
       }),
       {} as ResultTemplateConfig["fields"],
     ),
+    positionMarkers: clonePositionMarkers(defaultPositionMarkers),
     resultNumberFormat: "number",
     active: true,
     createdAt: now,

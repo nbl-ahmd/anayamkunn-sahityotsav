@@ -3,10 +3,13 @@ import { ADMIN_SESSION_COOKIE_NAME, isValidAdminSessionToken } from "@/lib/admin
 import { UNIT_LIST } from "@/lib/constants";
 import { getAdminResultsSnapshot, publishResult } from "@/lib/results-store";
 import {
+  normalizeLayoutOverride as normalizeResultLayoutOverride,
+  normalizePositionMarkers,
+} from "@/lib/results-layout";
+import {
   RESULT_FIELD_KEYS,
   PublishResultInput,
   ResultEntry,
-  ResultTemplateFields,
   ResultTextBox,
 } from "@/lib/results-types";
 import { UnitName } from "@/lib/types";
@@ -82,15 +85,21 @@ function normalizeTextBox(input: Partial<ResultTextBox> | undefined, fallback: R
   };
 }
 
-function normalizeLayoutOverride(value: unknown): ResultTemplateFields | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+function normalizePublishLayoutOverride(value: unknown) {
+  const defaults = buildDefaultResultTemplate();
+  const normalized = normalizeResultLayoutOverride(value, defaults.fields, defaults.positionMarkers);
+  if (!normalized) {
     return null;
   }
-  const defaults = buildDefaultResultTemplate();
-  return RESULT_FIELD_KEYS.reduce((fields, key) => ({
-    ...fields,
-    [key]: normalizeTextBox((value as Partial<ResultTemplateFields>)[key], defaults.fields[key]),
-  }), defaults.fields);
+  return {
+    fields: RESULT_FIELD_KEYS.reduce((fields, key) => ({
+      ...fields,
+      [key]: normalizeTextBox(normalized.fields[key], defaults.fields[key]),
+    }), defaults.fields),
+    positionMarkers: normalized.positionMarkers
+      ? normalizePositionMarkers(normalized.positionMarkers, defaults.positionMarkers, normalizeTextBox)
+      : undefined,
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -117,7 +126,7 @@ export async function POST(req: NextRequest) {
     const input: PublishResultInput = {
       programId: typeof body.programId === "string" ? body.programId : "",
       templateId: typeof body.templateId === "string" && body.templateId ? body.templateId : undefined,
-      layoutOverride: normalizeLayoutOverride(body.layoutOverride),
+      layoutOverride: normalizePublishLayoutOverride(body.layoutOverride),
       entries: [1, 2, 3].map((position) =>
         normalizeEntry(
           rawEntries.find((entry) => Number((entry as ResultEntry).position) === position) as Partial<ResultEntry> ?? {},

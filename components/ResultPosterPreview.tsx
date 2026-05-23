@@ -2,7 +2,20 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { RESULT_FIELD_KEYS, ResultAdConfig, ResultFieldKey, ResultTemplateConfig, ResultTextBox } from "@/lib/results-types";
+import {
+  getVisiblePlacementsFromValues,
+  markerDefaultsFromFields,
+  positionFieldKeys,
+} from "@/lib/results-layout";
+import {
+  RESULT_FIELD_KEYS,
+  ResultAdConfig,
+  ResultFieldKey,
+  ResultPositionKey,
+  ResultPositionMarker,
+  ResultTemplateConfig,
+  ResultTextBox,
+} from "@/lib/results-types";
 
 interface ResultPosterPreviewProps {
   template: ResultTemplateConfig;
@@ -12,8 +25,11 @@ interface ResultPosterPreviewProps {
   editable?: boolean;
   dragEnabled?: boolean;
   activeField?: ResultFieldKey | null;
+  activeMarker?: ResultPositionKey | null;
   onSelectField?: (key: ResultFieldKey) => void;
+  onSelectMarker?: (key: ResultPositionKey) => void;
   onFieldChange?: (key: ResultFieldKey, patch: Partial<ResultTextBox>) => void;
+  onMarkerChange?: (key: ResultPositionKey, marker: ResultPositionMarker) => void;
 }
 
 function resolvePreviewFontFamily(fontFamily: string): string {
@@ -31,13 +47,20 @@ export function ResultPosterPreview({
   editable = false,
   dragEnabled = false,
   activeField,
+  activeMarker,
   onSelectField,
+  onSelectMarker,
   onFieldChange,
+  onMarkerChange,
 }: ResultPosterPreviewProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const posterRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(360);
-  const dragRef = useRef<{ key: ResultFieldKey; offsetX: number; offsetY: number } | null>(null);
+  const dragRef = useRef<
+    | { type: "field"; key: ResultFieldKey; offsetX: number; offsetY: number }
+    | { type: "marker"; key: ResultPositionKey; offsetX: number; offsetY: number }
+    | null
+  >(null);
   const hasAd = Boolean(ad?.imageUrl);
   const outputHeight = template.size.posterHeight + (hasAd ? template.size.adHeight : 0);
   const posterHeightPercent = (template.size.posterHeight / outputHeight) * 100;
@@ -60,6 +83,32 @@ export function ResultPosterPreview({
     () => `${template.size.width} / ${outputHeight}`,
     [outputHeight, template.size.width],
   );
+  const visiblePlacements = getVisiblePlacementsFromValues(values);
+  const positionMarkers = template.positionMarkers ?? markerDefaultsFromFields(template.fields);
+  const positionFieldSet = new Set<ResultFieldKey>(Object.values(positionFieldKeys));
+
+  const patchMarkerPosition = (key: ResultPositionKey, rawX: number, rawY: number) => {
+    const marker = positionMarkers[key];
+    if (marker.mode === "hidden") {
+      return;
+    }
+    if (marker.mode === "text") {
+      onMarkerChange?.(key, {
+        ...marker,
+        box: {
+          ...marker.box,
+          x: Math.min(1 - marker.box.width, Math.max(0, rawX)),
+          y: Math.min(1 - marker.box.height, Math.max(0, rawY)),
+        },
+      });
+      return;
+    }
+    onMarkerChange?.(key, {
+      ...marker,
+      x: Math.min(1 - marker.width, Math.max(0, rawX)),
+      y: Math.min(1 - marker.height, Math.max(0, rawY)),
+    });
+  };
 
   return (
     <div ref={wrapRef} className={className}>
@@ -88,7 +137,138 @@ export function ResultPosterPreview({
             </div>
           )}
 
-          {RESULT_FIELD_KEYS.map((key) => {
+          {visiblePlacements.map((key) => {
+            const marker = positionMarkers[key];
+            if (marker.mode === "hidden") {
+              return null;
+            }
+
+            const markerBox = marker.mode === "text"
+              ? marker.box
+              : {
+                  x: marker.x,
+                  y: marker.y,
+                  width: marker.mode === "shape" && marker.direction === "horizontal"
+                    ? marker.width * marker.repeat + marker.gap * (marker.repeat - 1)
+                    : marker.width,
+                  height: marker.mode === "shape" && marker.direction === "vertical"
+                    ? marker.height * marker.repeat + marker.gap * (marker.repeat - 1)
+                    : marker.height,
+                };
+            const isActive = activeMarker === key;
+
+            const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+              if (!editable) {
+                return;
+              }
+              onSelectMarker?.(key);
+              if (!dragEnabled || !posterRef.current) {
+                return;
+              }
+              const rect = posterRef.current.getBoundingClientRect();
+              const x = event.clientX - rect.left - markerBox.x * rect.width;
+              const y = event.clientY - rect.top - markerBox.y * rect.height;
+              dragRef.current = { type: "marker", key, offsetX: x, offsetY: y };
+              event.currentTarget.setPointerCapture(event.pointerId);
+            };
+
+            const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+              if (!dragEnabled || !editable || !posterRef.current || !dragRef.current) {
+                return;
+              }
+              if (dragRef.current.type !== "marker" || dragRef.current.key !== key) {
+                return;
+              }
+              const rect = posterRef.current.getBoundingClientRect();
+              const rawX = (event.clientX - rect.left - dragRef.current.offsetX) / rect.width;
+              const rawY = (event.clientY - rect.top - dragRef.current.offsetY) / rect.height;
+              patchMarkerPosition(key, rawX, rawY);
+            };
+
+            const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+              if (dragRef.current?.type === "marker" && dragRef.current.key === key) {
+                dragRef.current = null;
+              }
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+              }
+            };
+
+            return (
+              <div
+                key={`marker-${key}`}
+                className={`absolute ${editable ? "cursor-move" : ""} ${isActive ? "ring-2 ring-sky-400/70" : ""}`}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+                onClick={() => editable && onSelectMarker?.(key)}
+                style={{
+                  left: `${markerBox.x * 100}%`,
+                  top: `${markerBox.y * 100}%`,
+                  width: `${markerBox.width * 100}%`,
+                  height: `${markerBox.height * 100}%`,
+                  opacity: marker.mode === "text" ? 1 : marker.opacity,
+                  transform: marker.mode === "shape" ? `rotate(${marker.rotation}deg)` : undefined,
+                }}
+              >
+                {marker.mode === "text" ? (
+                  <div
+                    className="flex h-full w-full overflow-hidden"
+                    style={{
+                      color: marker.box.color,
+                      fontFamily: resolvePreviewFontFamily(marker.box.fontFamily),
+                      fontSize: Math.max(7, marker.box.fontSize * scale),
+                      fontWeight: marker.box.fontWeight,
+                      lineHeight: marker.box.lineHeight,
+                      textAlign: marker.box.textAlign,
+                      alignItems:
+                        marker.box.verticalAlign === "top"
+                          ? "flex-start"
+                          : marker.box.verticalAlign === "bottom"
+                            ? "flex-end"
+                            : "center",
+                      justifyContent:
+                        marker.box.textAlign === "left"
+                          ? "flex-start"
+                          : marker.box.textAlign === "right"
+                            ? "flex-end"
+                            : "center",
+                      textTransform: marker.box.textTransform === "uppercase" ? "uppercase" : "none",
+                    }}
+                  >
+                    <span className="line-clamp-2 w-full break-words">{marker.text}</span>
+                  </div>
+                ) : marker.mode === "shape" ? (
+                  <div
+                    className={`flex h-full w-full ${marker.direction === "vertical" ? "flex-col" : "flex-row"}`}
+                    style={{
+                      gap: marker.direction === "vertical"
+                        ? `${(marker.gap / Math.max(markerBox.height, 0.001)) * 100}%`
+                        : `${(marker.gap / Math.max(markerBox.width, 0.001)) * 100}%`,
+                    }}
+                  >
+                    {Array.from({ length: marker.repeat }, (_, index) => (
+                      <div
+                        key={index}
+                        className={marker.shape === "circle" ? "rounded-full" : marker.shape === "roundedSquare" ? "rounded-[18%]" : ""}
+                        style={{
+                          width: marker.direction === "horizontal" ? `${(marker.width / markerBox.width) * 100}%` : "100%",
+                          height: marker.direction === "vertical" ? `${(marker.height / markerBox.height) * 100}%` : "100%",
+                          backgroundColor: marker.colors[index % marker.colors.length] ?? "#f43f5e",
+                          flex: "0 0 auto",
+                        }}
+                      />
+                    ))}
+                  </div>
+                ) : marker.imageUrl ? (
+                  <img src={marker.imageUrl} alt="" className="h-full w-full object-contain" draggable={false} />
+                ) : null}
+              </div>
+            );
+          })}
+
+          {RESULT_FIELD_KEYS.filter((key) => !positionFieldSet.has(key)).map((key) => {
             const layout = template.fields[key];
             const text = values[key]?.trim();
             if (!text) {
@@ -110,7 +290,7 @@ export function ResultPosterPreview({
               const top = rect.top;
               const x = event.clientX - left - layout.x * rect.width;
               const y = event.clientY - top - layout.y * rect.height;
-              dragRef.current = { key, offsetX: x, offsetY: y };
+              dragRef.current = { type: "field", key, offsetX: x, offsetY: y };
               event.currentTarget.setPointerCapture(event.pointerId);
             };
 
@@ -118,7 +298,7 @@ export function ResultPosterPreview({
               if (!dragEnabled || !editable || !posterRef.current || !dragRef.current) {
                 return;
               }
-              if (dragRef.current.key !== key) {
+              if (dragRef.current.type !== "field" || dragRef.current.key !== key) {
                 return;
               }
               const rect = posterRef.current.getBoundingClientRect();
@@ -130,7 +310,7 @@ export function ResultPosterPreview({
             };
 
             const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-              if (dragRef.current?.key === key) {
+              if (dragRef.current?.type === "field" && dragRef.current.key === key) {
                 dragRef.current = null;
               }
               if (event.currentTarget.hasPointerCapture(event.pointerId)) {

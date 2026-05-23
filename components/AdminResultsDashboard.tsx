@@ -17,17 +17,23 @@ import {
 } from "lucide-react";
 import { UNIT_LIST } from "@/lib/constants";
 import { downloadBlob } from "@/lib/client-utils";
-import { buildDefaultResultTemplate } from "@/lib/results-defaults";
+import { buildDefaultResultTemplate, clonePositionMarkers } from "@/lib/results-defaults";
+import { positionFieldKeys } from "@/lib/results-layout";
 import {
   RESULT_CATEGORY_GROUPS,
   RESULT_FIELD_KEYS,
+  RESULT_POSITION_KEYS,
   ResultAdConfig,
   ResultEntry,
   ResultFieldKey,
+  ResultLayoutOverride,
+  ResultPositionKey,
+  ResultPositionMarker,
   ResultProgram,
   ResultsAdminSnapshot,
   ResultTemplateConfig,
   ResultTemplateFields,
+  ResultTemplatePositionMarkers,
   ResultTemplateScopeType,
   ResultTextBox,
 } from "@/lib/results-types";
@@ -43,7 +49,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const noneValue = "__none__";
-const posterRenderVersion = "path-text-v3";
+const posterRenderVersion = "path-marker-v1";
 
 const emptyEntries: ResultEntry[] = [1, 2, 3].map((position) => ({
   position: position as 1 | 2 | 3,
@@ -73,6 +79,12 @@ const winnerNameFields: ResultFieldKey[] = ["firstName", "secondName", "thirdNam
 const winnerUnitFields: ResultFieldKey[] = ["firstUnit", "secondUnit", "thirdUnit"];
 
 type PublishLayoutTarget = "field" | "winnerNames" | "winnerUnits";
+
+const positionLabels: Record<ResultPositionKey, string> = {
+  first: "1st Position",
+  second: "2nd Position",
+  third: "3rd Position",
+};
 
 const previewValuesBase: Record<ResultFieldKey, string> = {
   resultNumber: "Result 01",
@@ -104,6 +116,38 @@ function cloneFields(fields: ResultTemplateFields): ResultTemplateFields {
     ...next,
     [key]: { ...fields[key] },
   }), {} as ResultTemplateFields);
+}
+
+function cloneLayout(template: ResultTemplateConfig): ResultLayoutOverride {
+  return {
+    fields: cloneFields(template.fields),
+    positionMarkers: clonePositionMarkers(template.positionMarkers),
+  };
+}
+
+function defaultShapeMarker(position: ResultPositionKey): ResultPositionMarker {
+  const index = RESULT_POSITION_KEYS.indexOf(position);
+  const y = [0.47, 0.61, 0.75][index] ?? 0.47;
+  const colors = position === "first"
+    ? ["#f43f5e"]
+    : position === "second"
+      ? ["#f5c542", "#f43f5e"]
+      : ["#5b0f6b", "#f5c542", "#f43f5e"];
+  return {
+    mode: "shape",
+    visible: true,
+    x: 0.17,
+    y,
+    width: 0.026,
+    height: 0.026,
+    repeat: index + 1,
+    direction: "horizontal",
+    gap: 0.008,
+    shape: "square",
+    colors,
+    rotation: 0,
+    opacity: 1,
+  };
 }
 
 function scopeTargets(programs: ResultProgram[], scopeType: ResultTemplateScopeType) {
@@ -174,12 +218,14 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
   const [entries, setEntries] = useState<ResultEntry[]>(emptyEntries);
   const [visiblePositions, setVisiblePositions] = useState<Record<2 | 3, boolean>>({ 2: true, 3: true });
   const [publishLayoutOpen, setPublishLayoutOpen] = useState(false);
-  const [publishLayoutDraft, setPublishLayoutDraft] = useState<ResultTemplateFields | null>(null);
+  const [publishLayoutDraft, setPublishLayoutDraft] = useState<ResultLayoutOverride | null>(null);
   const [publishActiveField, setPublishActiveField] = useState<ResultFieldKey>("firstName");
+  const [publishActiveMarker, setPublishActiveMarker] = useState<ResultPositionKey>("first");
   const [publishLayoutTarget, setPublishLayoutTarget] = useState<PublishLayoutTarget>("field");
   const [publishDragEnabled, setPublishDragEnabled] = useState(true);
   const [templateDraft, setTemplateDraft] = useState<ResultTemplateConfig>(buildFreshTemplate);
   const [activeField, setActiveField] = useState<ResultFieldKey>("competitionName");
+  const [activeMarker, setActiveMarker] = useState<ResultPositionKey>("first");
   const [dragEnabled, setDragEnabled] = useState(true);
   const [adDraft, setAdDraft] = useState<ResultAdConfig>({
     id: "",
@@ -194,6 +240,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
     updatedAt: new Date().toISOString(),
   });
   const templateUploadRef = useRef<HTMLInputElement>(null);
+  const markerUploadRef = useRef<HTMLInputElement>(null);
   const adUploadRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
@@ -254,13 +301,17 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
 
   useEffect(() => {
     if (publishLayoutOpen) {
-      setPublishLayoutDraft(cloneFields(publishBaseTemplate.fields));
+      setPublishLayoutDraft(cloneLayout(publishBaseTemplate));
     }
   }, [publishBaseTemplate, publishLayoutOpen]);
 
   const publishPreviewTemplate = useMemo<ResultTemplateConfig>(() => ({
     ...publishBaseTemplate,
-    fields: publishLayoutOpen && publishLayoutDraft ? publishLayoutDraft : publishBaseTemplate.fields,
+    fields: publishLayoutOpen && publishLayoutDraft ? publishLayoutDraft.fields : publishBaseTemplate.fields,
+    positionMarkers:
+      publishLayoutOpen && publishLayoutDraft?.positionMarkers
+        ? publishLayoutDraft.positionMarkers
+        : publishBaseTemplate.positionMarkers,
   }), [publishBaseTemplate, publishLayoutDraft, publishLayoutOpen]);
 
   const existingSelectedResult = useMemo(
@@ -329,7 +380,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
 
   const setPublishLayoutEnabled = (enabled: boolean) => {
     setPublishLayoutOpen(enabled);
-    setPublishLayoutDraft(enabled ? cloneFields(publishBaseTemplate.fields) : null);
+    setPublishLayoutDraft(enabled ? cloneLayout(publishBaseTemplate) : null);
   };
 
   const publishTargetFields = useMemo(() => {
@@ -344,12 +395,15 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
 
   const patchPublishField = (key: ResultFieldKey, patch: Partial<ResultTextBox>) => {
     setPublishLayoutDraft((current) => {
-      const fields = current ?? cloneFields(publishBaseTemplate.fields);
+      const draft = current ?? cloneLayout(publishBaseTemplate);
       return {
-        ...fields,
-        [key]: {
-          ...fields[key],
-          ...patch,
+        ...draft,
+        fields: {
+          ...draft.fields,
+          [key]: {
+            ...draft.fields[key],
+            ...patch,
+          },
         },
       };
     });
@@ -357,19 +411,35 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
 
   const patchPublishTarget = (patch: Partial<ResultTextBox>) => {
     setPublishLayoutDraft((current) => {
-      const fields = current ?? cloneFields(publishBaseTemplate.fields);
-      return publishTargetFields.reduce((next, key) => ({
-        ...next,
-        [key]: {
-          ...next[key],
-          ...patch,
+      const draft = current ?? cloneLayout(publishBaseTemplate);
+      return {
+        ...draft,
+        fields: publishTargetFields.reduce((next, key) => ({
+          ...next,
+          [key]: {
+            ...next[key],
+            ...patch,
+          },
+        }), draft.fields),
+      };
+    });
+  };
+
+  const patchPublishMarker = (key: ResultPositionKey, marker: ResultPositionMarker) => {
+    setPublishLayoutDraft((current) => {
+      const draft = current ?? cloneLayout(publishBaseTemplate);
+      return {
+        ...draft,
+        positionMarkers: {
+          ...(draft.positionMarkers ?? clonePositionMarkers(publishBaseTemplate.positionMarkers)),
+          [key]: marker,
         },
-      }), fields);
+      };
     });
   };
 
   const resetPublishLayout = () => {
-    setPublishLayoutDraft(cloneFields(publishBaseTemplate.fields));
+    setPublishLayoutDraft(cloneLayout(publishBaseTemplate));
   };
 
   const onCategoryChange = (nextCategory: string) => {
@@ -402,6 +472,37 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
       toast.success(`Template image uploaded (${uploaded.width}x${uploaded.height}).`);
     } catch {
       toast.error("Could not upload template image. Check Blob configuration.");
+    } finally {
+      setSaving(false);
+      event.target.value = "";
+    }
+  };
+
+  const onMarkerFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      setSaving(true);
+      const uploaded = await uploadAsset(file, "template");
+      setTemplateDraft((prev) => ({
+        ...prev,
+        positionMarkers: {
+          ...prev.positionMarkers,
+          [activeMarker]: {
+            mode: "image",
+            visible: true,
+            x: 0.17,
+            y: activeMarker === "first" ? 0.47 : activeMarker === "second" ? 0.61 : 0.75,
+            width: 0.06,
+            height: 0.06,
+            imageUrl: uploaded.url,
+            opacity: 1,
+          },
+        },
+      }));
+      toast.success(`Marker image uploaded (${uploaded.width}x${uploaded.height}).`);
+    } catch {
+      toast.error("Could not upload marker image.");
     } finally {
       setSaving(false);
       event.target.value = "";
@@ -511,12 +612,22 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
     `/api/results/${result.id}/poster?templateId=${encodeURIComponent(result.templateId)}&v=${posterRenderVersion}`;
 
   const field = templateDraft.fields[activeField];
+  const marker = templateDraft.positionMarkers[activeMarker];
   const publishLayoutReferenceKey = publishLayoutTarget === "winnerNames"
     ? "firstName"
     : publishLayoutTarget === "winnerUnits"
       ? "firstUnit"
       : publishActiveField;
   const publishLayoutField = publishPreviewTemplate.fields[publishLayoutReferenceKey];
+  const patchTemplateMarker = (key: ResultPositionKey, nextMarker: ResultPositionMarker) => {
+    setTemplateDraft((prev) => ({
+      ...prev,
+      positionMarkers: {
+        ...prev.positionMarkers,
+        [key]: nextMarker,
+      },
+    }));
+  };
   const previewValues = useMemo(() => {
     const padded = "01";
     const resultNumber = padded;
@@ -923,11 +1034,14 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                     editable={publishLayoutOpen}
                     dragEnabled={publishDragEnabled}
                     activeField={publishActiveField}
+                    activeMarker={publishActiveMarker}
                     onSelectField={(key) => {
                       setPublishActiveField(key);
                       setPublishLayoutTarget("field");
                     }}
+                    onSelectMarker={setPublishActiveMarker}
                     onFieldChange={patchPublishField}
+                    onMarkerChange={patchPublishMarker}
                   />
                 </CardContent>
               </Card>
@@ -1137,6 +1251,247 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                   </div>
                 </div>
 
+                <div className="rounded-xl border border-slate-200 p-4">
+                  <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-bold text-slate-950">Position Marker</p>
+                      <p className="text-xs text-slate-500">Use numbers, square groups, dots, images, or hide markers for creative templates.</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const defaults = buildDefaultResultTemplate();
+                          setTemplateDraft((prev) => ({
+                            ...prev,
+                            positionMarkers: clonePositionMarkers(defaults.positionMarkers),
+                          }));
+                        }}
+                      >
+                        Numbers
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setTemplateDraft((prev) => ({
+                          ...prev,
+                          positionMarkers: RESULT_POSITION_KEYS.reduce((next, key) => ({
+                            ...next,
+                            [key]: defaultShapeMarker(key),
+                          }), {} as ResultTemplatePositionMarkers),
+                        }))}
+                      >
+                        Square Stack
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setTemplateDraft((prev) => ({
+                          ...prev,
+                          positionMarkers: RESULT_POSITION_KEYS.reduce((next, key) => ({
+                            ...next,
+                            [key]: {
+                              ...defaultShapeMarker(key),
+                              shape: "circle",
+                            },
+                          }), {} as ResultTemplatePositionMarkers),
+                        }))}
+                      >
+                        Dot Stack
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setTemplateDraft((prev) => ({
+                          ...prev,
+                          positionMarkers: RESULT_POSITION_KEYS.reduce((next, key) => ({
+                            ...next,
+                            [key]: { mode: "hidden", visible: false },
+                          }), {} as ResultTemplatePositionMarkers),
+                        }))}
+                      >
+                        Hide
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label>Position</Label>
+                      <Select value={activeMarker} onValueChange={(value) => setActiveMarker(value as ResultPositionKey)}>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {RESULT_POSITION_KEYS.map((key) => <SelectItem key={key} value={key}>{positionLabels[key]}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Marker Type</Label>
+                      <Select
+                        value={marker.mode}
+                        onValueChange={(value) => {
+                          if (value === "hidden") {
+                            patchTemplateMarker(activeMarker, { mode: "hidden", visible: false });
+                            return;
+                          }
+                          if (value === "shape") {
+                            patchTemplateMarker(activeMarker, defaultShapeMarker(activeMarker));
+                            return;
+                          }
+                          if (value === "image") {
+                            patchTemplateMarker(activeMarker, {
+                              mode: "image",
+                              visible: true,
+                              x: marker.mode === "text" ? marker.box.x : marker.mode === "hidden" ? 0.17 : marker.x,
+                              y: marker.mode === "text" ? marker.box.y : marker.mode === "hidden" ? 0.47 : marker.y,
+                              width: 0.06,
+                              height: 0.06,
+                              imageUrl: "",
+                              opacity: 1,
+                            });
+                            return;
+                          }
+                          const textBox = marker.mode === "text"
+                            ? marker.box
+                            : templateDraft.fields[positionFieldKeys[activeMarker]];
+                          patchTemplateMarker(activeMarker, {
+                            mode: "text",
+                            visible: true,
+                            text: activeMarker === "first" ? "1" : activeMarker === "second" ? "2" : "3",
+                            box: { ...textBox },
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="text">Text Number</SelectItem>
+                          <SelectItem value="shape">Shape Group</SelectItem>
+                          <SelectItem value="image">Image/Icon</SelectItem>
+                          <SelectItem value="hidden">Hidden</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Drag to Position</Label>
+                      <Select value={dragEnabled ? "on" : "off"} onValueChange={(value) => setDragEnabled(value === "on")}>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="on">On</SelectItem>
+                          <SelectItem value="off">Off</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {marker.mode === "text" ? (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                      <div className="space-y-1.5">
+                        <Label>Text</Label>
+                        <Input value={marker.text} onChange={(event) => patchTemplateMarker(activeMarker, { ...marker, text: event.target.value })} />
+                      </div>
+                      {(["x", "y", "width", "height"] as const).map((key) => (
+                        <div key={key} className="space-y-1.5">
+                          <Label>{key.toUpperCase()} %</Label>
+                          <Input type="number" step="0.5" value={Math.round(marker.box[key] * 1000) / 10} onChange={(event) => patchTemplateMarker(activeMarker, { ...marker, box: { ...marker.box, [key]: Number(event.target.value) / 100 } })} />
+                        </div>
+                      ))}
+                      <div className="space-y-1.5">
+                        <Label>Font</Label>
+                        <Input type="number" value={marker.box.fontSize} onChange={(event) => patchTemplateMarker(activeMarker, { ...marker, box: { ...marker.box, fontSize: Number(event.target.value) } })} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Weight</Label>
+                        <Input type="number" step="100" value={marker.box.fontWeight} onChange={(event) => patchTemplateMarker(activeMarker, { ...marker, box: { ...marker.box, fontWeight: Number(event.target.value) } })} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Color</Label>
+                        <Input type="color" value={marker.box.color} onChange={(event) => patchTemplateMarker(activeMarker, { ...marker, box: { ...marker.box, color: event.target.value } })} />
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {marker.mode === "shape" ? (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                      {(["x", "y", "width", "height"] as const).map((key) => (
+                        <div key={key} className="space-y-1.5">
+                          <Label>{key.toUpperCase()} %</Label>
+                          <Input type="number" step="0.5" value={Math.round(marker[key] * 1000) / 10} onChange={(event) => patchTemplateMarker(activeMarker, { ...marker, [key]: Number(event.target.value) / 100 })} />
+                        </div>
+                      ))}
+                      <div className="space-y-1.5">
+                        <Label>Repeat</Label>
+                        <Input type="number" value={marker.repeat} onChange={(event) => patchTemplateMarker(activeMarker, { ...marker, repeat: Number(event.target.value) })} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Gap %</Label>
+                        <Input type="number" step="0.2" value={Math.round(marker.gap * 1000) / 10} onChange={(event) => patchTemplateMarker(activeMarker, { ...marker, gap: Number(event.target.value) / 100 })} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Shape</Label>
+                        <Select value={marker.shape} onValueChange={(value) => patchTemplateMarker(activeMarker, { ...marker, shape: value as typeof marker.shape })}>
+                          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="square">Square</SelectItem>
+                            <SelectItem value="roundedSquare">Rounded Square</SelectItem>
+                            <SelectItem value="circle">Circle</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Direction</Label>
+                        <Select value={marker.direction} onValueChange={(value) => patchTemplateMarker(activeMarker, { ...marker, direction: value as typeof marker.direction })}>
+                          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="horizontal">Horizontal</SelectItem>
+                            <SelectItem value="vertical">Vertical</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Rotation</Label>
+                        <Input type="number" value={marker.rotation} onChange={(event) => patchTemplateMarker(activeMarker, { ...marker, rotation: Number(event.target.value) })} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Opacity</Label>
+                        <Input type="number" step="0.05" value={marker.opacity} onChange={(event) => patchTemplateMarker(activeMarker, { ...marker, opacity: Number(event.target.value) })} />
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label>Colors</Label>
+                        <Input value={marker.colors.join(", ")} onChange={(event) => patchTemplateMarker(activeMarker, { ...marker, colors: event.target.value.split(",").map((color) => color.trim()).filter(Boolean) })} />
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {marker.mode === "image" ? (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                      <input ref={markerUploadRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={onMarkerFile} />
+                      <Button type="button" variant="outline" onClick={() => markerUploadRef.current?.click()} disabled={saving}>
+                        <ImageUp className="h-4 w-4" />
+                        Upload Icon
+                      </Button>
+                      {(["x", "y", "width", "height"] as const).map((key) => (
+                        <div key={key} className="space-y-1.5">
+                          <Label>{key.toUpperCase()} %</Label>
+                          <Input type="number" step="0.5" value={Math.round(marker[key] * 1000) / 10} onChange={(event) => patchTemplateMarker(activeMarker, { ...marker, [key]: Number(event.target.value) / 100 })} />
+                        </div>
+                      ))}
+                      <div className="space-y-1.5">
+                        <Label>Opacity</Label>
+                        <Input type="number" step="0.05" value={marker.opacity} onChange={(event) => patchTemplateMarker(activeMarker, { ...marker, opacity: Number(event.target.value) })} />
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-3">
+                        <Label>Image URL</Label>
+                        <Input value={marker.imageUrl} onChange={(event) => patchTemplateMarker(activeMarker, { ...marker, imageUrl: event.target.value })} />
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
                 <Button onClick={saveTemplate} disabled={saving}>
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Save Template
@@ -1156,7 +1511,9 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                   editable
                   dragEnabled={dragEnabled}
                   activeField={activeField}
+                  activeMarker={activeMarker}
                   onSelectField={(key) => setActiveField(key)}
+                  onSelectMarker={setActiveMarker}
                   onFieldChange={(key, patch) =>
                     setTemplateDraft((prev) => ({
                       ...prev,
@@ -1166,6 +1523,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                       },
                     }))
                   }
+                  onMarkerChange={patchTemplateMarker}
                 />
               </CardContent>
             </Card>

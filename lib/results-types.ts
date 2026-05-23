@@ -31,6 +31,10 @@ export const RESULT_FIELD_KEYS = [
 
 export type ResultFieldKey = (typeof RESULT_FIELD_KEYS)[number];
 
+export const RESULT_POSITION_KEYS = ["first", "second", "third"] as const;
+
+export type ResultPositionKey = (typeof RESULT_POSITION_KEYS)[number];
+
 export interface ResultProgram {
   id: string;
   competitionName: string;
@@ -64,6 +68,50 @@ export interface ResultTextBox {
 
 export type ResultTemplateFields = Record<ResultFieldKey, ResultTextBox>;
 
+export type ResultPositionMarker =
+  | {
+      mode: "text";
+      visible: true;
+      text: string;
+      box: ResultTextBox;
+    }
+  | {
+      mode: "shape";
+      visible: true;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      repeat: number;
+      direction: "horizontal" | "vertical";
+      gap: number;
+      shape: "square" | "circle" | "roundedSquare";
+      colors: string[];
+      rotation: number;
+      opacity: number;
+    }
+  | {
+      mode: "image";
+      visible: true;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      imageUrl: string;
+      opacity: number;
+    }
+  | {
+      mode: "hidden";
+      visible: false;
+    };
+
+export type ResultTemplatePositionMarkers = Record<ResultPositionKey, ResultPositionMarker>;
+
+export interface ResultLayoutOverride {
+  fields: ResultTemplateFields;
+  positionMarkers?: ResultTemplatePositionMarkers;
+}
+
 export interface ResultTemplateConfig {
   id: string;
   name: string;
@@ -72,6 +120,7 @@ export interface ResultTemplateConfig {
   backgroundImage: string | null;
   size: ResultPosterSize;
   fields: ResultTemplateFields;
+  positionMarkers: ResultTemplatePositionMarkers;
   resultNumberFormat: "label" | "number";
   active: boolean;
   createdAt: string;
@@ -96,7 +145,7 @@ export interface PublishedResult {
   resultNumber: number;
   entries: ResultEntry[];
   templateId: string;
-  layoutOverride: ResultTemplateFields | null;
+  layoutOverride: ResultLayoutOverride | null;
   adId: string | null;
   posterImageUrl: string;
   status: "published";
@@ -142,7 +191,7 @@ export interface PublishResultInput {
   programId: string;
   entries: ResultEntry[];
   templateId?: string;
-  layoutOverride?: ResultTemplateFields | null;
+  layoutOverride?: ResultLayoutOverride | ResultTemplateFields | null;
 }
 
 export interface SaveResultTemplateInput {
@@ -153,6 +202,7 @@ export interface SaveResultTemplateInput {
   backgroundImage: string | null;
   size: ResultPosterSize;
   fields: ResultTemplateFields;
+  positionMarkers?: ResultTemplatePositionMarkers;
   resultNumberFormat?: "label" | "number";
   active: boolean;
 }
