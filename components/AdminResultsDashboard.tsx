@@ -152,7 +152,7 @@ export function AdminResultsDashboard() {
         setProgramId(firstProgram.id);
       }
       if (data.templates[0] && !templateDraft.id) {
-        setTemplateDraft(data.templates[0]);
+        setTemplateDraft({ ...data.templates[0], resultNumberFormat: "number" });
       }
     } catch {
       toast.error("Could not load result dashboard.");
@@ -210,7 +210,7 @@ export function AdminResultsDashboard() {
     const third = byPosition.get(3);
 
     return {
-      resultNumber: publishPreviewTemplate.resultNumberFormat === "number" ? padded : `Result ${padded}`,
+      resultNumber: padded,
       categoryName: selectedProgram?.category ?? category,
       competitionName: selectedProgram?.competitionName ?? "Competition",
       firstPosition: "1",
@@ -223,7 +223,7 @@ export function AdminResultsDashboard() {
       thirdName: third?.name.trim() || "Third winner name",
       thirdUnit: third?.unit ?? UNIT_LIST[2],
     };
-  }, [category, entries, existingSelectedResult?.resultNumber, publishPreviewTemplate.resultNumberFormat, results.length, selectedProgram]);
+  }, [category, entries, existingSelectedResult?.resultNumber, results.length, selectedProgram]);
 
   const patchEntry = (position: 1 | 2 | 3, patch: Partial<ResultEntry>) => {
     setEntries((prev) => prev.map((entry) => (entry.position === position ? { ...entry, ...patch } : entry)));
@@ -314,7 +314,7 @@ export function AdminResultsDashboard() {
       const response = await fetch("/api/admin/results/templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(templateDraft),
+        body: JSON.stringify({ ...templateDraft, resultNumberFormat: "number" }),
       });
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
@@ -366,12 +366,12 @@ export function AdminResultsDashboard() {
   const field = templateDraft.fields[activeField];
   const previewValues = useMemo(() => {
     const padded = "01";
-    const resultNumber = templateDraft.resultNumberFormat === "number" ? padded : `Result ${padded}`;
+    const resultNumber = padded;
     return {
       ...previewValuesBase,
       resultNumber,
     };
-  }, [templateDraft.resultNumberFormat]);
+  }, []);
   const templateScopeOptions = scopeTargets(programs, templateDraft.scopeType);
   const adScopeOptions = scopeTargets(programs, adDraft.scopeType);
 
@@ -602,7 +602,7 @@ export function AdminResultsDashboard() {
                         return;
                       }
                       const template = templates.find((item) => item.id === value);
-                      if (template) setTemplateDraft(template);
+                      if (template) setTemplateDraft({ ...template, resultNumberFormat: "number" });
                     }}>
                       <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -616,22 +616,8 @@ export function AdminResultsDashboard() {
                     <Input value={templateDraft.name} onChange={(event) => setTemplateDraft((prev) => ({ ...prev, name: event.target.value }))} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Result Number Format</Label>
-                    <Select
-                      value={templateDraft.resultNumberFormat}
-                      onValueChange={(value) =>
-                        setTemplateDraft((prev) => ({
-                          ...prev,
-                          resultNumberFormat: value as ResultTemplateConfig["resultNumberFormat"],
-                        }))
-                      }
-                    >
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="label">Result 01</SelectItem>
-                        <SelectItem value="number">01</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label>Result Number</Label>
+                    <Input readOnly value="01" className="bg-slate-50 font-semibold" />
                   </div>
                   <div className="space-y-2">
                     <Label>Scope</Label>

@@ -180,7 +180,7 @@ export function buildDefaultResultTemplate(): ResultTemplateConfig {
       }),
       {} as ResultTemplateConfig["fields"],
     ),
-    resultNumberFormat: "label",
+    resultNumberFormat: "number",
     active: true,
     createdAt: now,
     updatedAt: now,

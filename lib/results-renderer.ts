@@ -95,9 +95,8 @@ function applyTransform(value: string, transform: ResultTextBox["textTransform"]
   return value;
 }
 
-function formatResultNumber(resultNumber: number, format: ResultTemplateConfig["resultNumberFormat"]): string {
-  const padded = String(resultNumber).padStart(2, "0");
-  return format === "number" ? padded : `Result ${padded}`;
+function formatResultNumber(resultNumber: number): string {
+  return String(resultNumber).padStart(2, "0");
 }
 
 function getFieldValues(
@@ -110,7 +109,7 @@ function getFieldValues(
   const third = byPosition.get(3);
 
   return {
-    resultNumber: formatResultNumber(result.resultNumber, template.resultNumberFormat),
+    resultNumber: formatResultNumber(result.resultNumber),
     categoryName: result.category,
     competitionName: result.competitionName,
     firstPosition: "1",
