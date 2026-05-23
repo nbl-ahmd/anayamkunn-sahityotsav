@@ -222,7 +222,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
     return {
       resultNumber: padded,
       categoryName: selectedProgram?.category ?? category,
-      competitionName: selectedProgram?.competitionName ?? "Competition",
+      competitionName: selectedProgram?.publicCompetitionName ?? "Competition",
       firstPosition: "1",
       firstName: first?.name.trim() || "First winner name",
       firstUnit: first?.unit ?? UNIT_LIST[0],

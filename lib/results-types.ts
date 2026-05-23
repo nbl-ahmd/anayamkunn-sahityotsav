@@ -34,6 +34,7 @@ export type ResultFieldKey = (typeof RESULT_FIELD_KEYS)[number];
 export interface ResultProgram {
   id: string;
   competitionName: string;
+  publicCompetitionName: string;
   category: string;
   categoryGroup: ResultCategoryGroup;
   sortOrder: number;

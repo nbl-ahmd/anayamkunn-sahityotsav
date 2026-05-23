@@ -159,9 +159,27 @@ export function getCategoryGroup(category: string): ResultCategoryGroup {
   return "General";
 }
 
+export function getPublicCompetitionName(competitionName: string): string {
+  const suffixes: string[] = [];
+  const baseName = competitionName
+    .replace(/\s*\(([^)]*)\)\s*/g, (_match, note: string) => {
+      const normalizedNote = note.replace(/\s+/g, " ").trim().toLowerCase();
+      if (normalizedNote === "girls only") {
+        suffixes.push("Girls");
+      }
+      return " ";
+    })
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const uniqueSuffixes = suffixes.filter((suffix, index) => suffixes.indexOf(suffix) === index);
+  return [baseName, ...uniqueSuffixes].filter(Boolean).join(" ");
+}
+
 export const RESULT_PROGRAMS: ResultProgram[] = RAW_PROGRAMS.map(([competitionName, category], index) => ({
   id: `${slugify(category)}-${slugify(competitionName)}-${index + 1}`,
   competitionName,
+  publicCompetitionName: getPublicCompetitionName(competitionName),
   category,
   categoryGroup: getCategoryGroup(category),
   sortOrder: index + 1,

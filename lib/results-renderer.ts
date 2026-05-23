@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
 import TextToSVG from "text-to-svg";
+import { getPublicCompetitionName } from "@/lib/result-programs";
 import {
   RESULT_FIELD_KEYS,
   ResultAdConfig,
@@ -111,7 +112,7 @@ function getFieldValues(
   return {
     resultNumber: formatResultNumber(result.resultNumber),
     categoryName: result.category,
-    competitionName: result.competitionName,
+    competitionName: getPublicCompetitionName(result.competitionName),
     firstPosition: "1",
     firstName: first?.name ?? "",
     firstUnit: first?.unit ?? "",

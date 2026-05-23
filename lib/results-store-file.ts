@@ -173,7 +173,7 @@ function normalizeResult(input: unknown): PublishedResult | null {
   return {
     id: typeof result.id === "string" && result.id ? result.id : randomUUID(),
     programId: program.id,
-    competitionName: program.competitionName,
+    competitionName: program.publicCompetitionName,
     category: program.category,
     categoryGroup: program.categoryGroup,
     resultNumber: Math.max(1, Math.floor(Number(result.resultNumber))),
@@ -360,7 +360,7 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
     const result: PublishedResult = {
       id: existing?.id ?? randomUUID(),
       programId: program.id,
-      competitionName: program.competitionName,
+      competitionName: program.publicCompetitionName,
       category: program.category,
       categoryGroup: program.categoryGroup,
       resultNumber,

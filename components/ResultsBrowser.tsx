@@ -174,7 +174,7 @@ export function ResultsBrowser({ snapshot }: { snapshot: ResultsPublicSnapshot }
             >
               {programs.map((program) => (
                 <option key={program.id} value={program.id}>
-                  {program.category !== program.categoryGroup ? `${program.competitionName} (${program.category})` : program.competitionName}
+                  {program.category !== program.categoryGroup ? `${program.publicCompetitionName} (${program.category})` : program.publicCompetitionName}
                 </option>
               ))}
             </select>

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getSql } from "@/lib/db";
 import { UNIT_LIST } from "@/lib/constants";
 import { UnitName } from "@/lib/types";
-import { RESULT_PROGRAMS, getResultProgram } from "@/lib/result-programs";
+import { RESULT_PROGRAMS, getPublicCompetitionName, getResultProgram } from "@/lib/result-programs";
 import { persistGeneratedResultPoster } from "@/lib/results-assets";
 import { buildDefaultResultTemplate, DEFAULT_RESULT_TEMPLATE_ID } from "@/lib/results-defaults";
 import { renderResultPoster } from "@/lib/results-renderer";
@@ -268,7 +268,7 @@ function rowToResult(row: ResultRow): PublishedResult | null {
   return {
     id: row.id,
     programId: program.id,
-    competitionName: row.competition_name,
+    competitionName: getPublicCompetitionName(row.competition_name || program.competitionName),
     category: row.category,
     categoryGroup: program.categoryGroup,
     resultNumber: Number(row.result_number),
@@ -551,7 +551,7 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
   const result: PublishedResult = {
     id: existing?.id ?? randomUUID(),
     programId: program.id,
-    competitionName: program.competitionName,
+    competitionName: program.publicCompetitionName,
     category: program.category,
     categoryGroup: program.categoryGroup,
     resultNumber,
