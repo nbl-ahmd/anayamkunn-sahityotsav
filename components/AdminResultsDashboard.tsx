@@ -114,6 +114,32 @@ function templateAppliesToProgram(template: ResultTemplateConfig, program: Resul
   return template.scopeValue === program.category || template.scopeValue === program.categoryGroup;
 }
 
+function scopePriority(
+  item: { scopeType: ResultTemplateScopeType; scopeValue: string | null },
+  program: ResultProgram,
+): number {
+  if (item.scopeType === "program" && item.scopeValue === program.id) return 4;
+  if (item.scopeType === "category" && item.scopeValue === program.category) return 3;
+  if (item.scopeType === "category" && item.scopeValue === program.categoryGroup) return 2;
+  if (item.scopeType === "global") return 1;
+  return 0;
+}
+
+function resolvePreviewAd(ads: ResultAdConfig[], resultNumber: number, program: ResultProgram | undefined): ResultAdConfig | null {
+  if (!program) {
+    return null;
+  }
+
+  return ads
+    .filter((ad) => ad.active && ad.imageUrl && ad.rangeStart <= resultNumber && ad.rangeEnd >= resultNumber)
+    .filter((ad) => {
+      if (ad.scopeType === "global") return true;
+      if (ad.scopeType === "program") return ad.scopeValue === program.id;
+      return ad.scopeValue === program.category || ad.scopeValue === program.categoryGroup;
+    })
+    .sort((left, right) => scopePriority(right, program) - scopePriority(left, program))[0] ?? null;
+}
+
 type ResultsStudioMode = "publish" | "templates";
 
 export function AdminResultsDashboard() {
@@ -211,9 +237,17 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
     [results, selectedProgram?.id],
   );
 
+  const publishPreviewResultNumber = existingSelectedResult?.resultNumber ?? results.length + 1;
+  const publishPreviewAd = useMemo(() => {
+    if (existingSelectedResult?.adId) {
+      return ads.find((ad) => ad.id === existingSelectedResult.adId) ?? null;
+    }
+
+    return resolvePreviewAd(ads, publishPreviewResultNumber, selectedProgram);
+  }, [ads, existingSelectedResult?.adId, publishPreviewResultNumber, selectedProgram]);
+
   const publishPreviewValues = useMemo<Record<ResultFieldKey, string>>(() => {
-    const resultNumber = existingSelectedResult?.resultNumber ?? results.length + 1;
-    const padded = String(resultNumber).padStart(2, "0");
+    const padded = String(publishPreviewResultNumber).padStart(2, "0");
     const byPosition = new Map(entries.map((entry) => [entry.position, entry]));
     const first = byPosition.get(1);
     const second = byPosition.get(2);
@@ -233,7 +267,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
       thirdName: third?.name.trim() || "Third winner name",
       thirdUnit: third?.unit ?? UNIT_LIST[2],
     };
-  }, [category, entries, existingSelectedResult?.resultNumber, results.length, selectedProgram]);
+  }, [category, entries, publishPreviewResultNumber, selectedProgram]);
 
   const patchEntry = (position: 1 | 2 | 3, patch: Partial<ResultEntry>) => {
     setEntries((prev) => prev.map((entry) => (entry.position === position ? { ...entry, ...patch } : entry)));
@@ -615,16 +649,19 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                   <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
                     Result numbers are assigned when a competition is first published and stay fixed on edits.
                   </div>
+                  <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+                    Sponsor ad: <span className="font-semibold text-slate-900">{publishPreviewAd?.name ?? "No ad assigned"}</span>
+                  </div>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Poster Preview</CardTitle>
-                  <CardDescription>Updates as winner details are entered.</CardDescription>
+                  <CardTitle>Final Poster Preview</CardTitle>
+                  <CardDescription>Shows the generated poster with the assigned sponsor ad when one applies.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ResultPosterPreview template={publishPreviewTemplate} values={publishPreviewValues} />
+                  <ResultPosterPreview template={publishPreviewTemplate} values={publishPreviewValues} ad={publishPreviewAd} />
                 </CardContent>
               </Card>
             </div>
