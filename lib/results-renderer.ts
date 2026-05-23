@@ -16,8 +16,13 @@ import {
 } from "@/lib/results-types";
 
 const COOPER_FONT_PATH = path.join(process.cwd(), "public/fonts/Cooper Black Regular.ttf");
+const NOTO_SANS_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSans-Regular.ttf");
 const MALAYALAM_REGULAR_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSansMalayalam-Regular.ttf");
 const MALAYALAM_BOLD_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSansMalayalam-Bold.ttf");
+const POPPINS_REGULAR_FONT_PATH = path.join(process.cwd(), "public/fonts/Poppins-Regular.ttf");
+const POPPINS_BOLD_FONT_PATH = path.join(process.cwd(), "public/fonts/Poppins-Bold.ttf");
+const MONTSERRAT_FONT_PATH = path.join(process.cwd(), "public/fonts/Montserrat.ttf");
+const INTER_FONT_PATH = path.join(process.cwd(), "public/fonts/Inter.ttf");
 
 const textToSvgCache = new Map<string, TextToSVG.Instance>();
 
@@ -51,14 +56,33 @@ function containsMalayalam(text: string): boolean {
 function fontPathForText(text: string, layout: Pick<ResultTextBox, "fontFamily" | "fontWeight">): string {
   const family = layout.fontFamily.toLowerCase();
   const isBold = layout.fontWeight >= 700;
-  if (!containsMalayalam(text)) {
-    if (family.includes("cooper")) {
-      return COOPER_FONT_PATH;
-    }
+  if (containsMalayalam(text)) {
+    return isBold ? MALAYALAM_BOLD_FONT_PATH : MALAYALAM_REGULAR_FONT_PATH;
+  }
+  if (family.includes("cooper")) {
+    return COOPER_FONT_PATH;
+  }
+  if (family.includes("poppins")) {
+    return isBold ? POPPINS_BOLD_FONT_PATH : POPPINS_REGULAR_FONT_PATH;
+  }
+  if (family.includes("montserrat")) {
+    return MONTSERRAT_FONT_PATH;
+  }
+  if (family.includes("inter")) {
+    return INTER_FONT_PATH;
+  }
+  if (family.includes("noto sans malayalam")) {
     return isBold ? MALAYALAM_BOLD_FONT_PATH : MALAYALAM_REGULAR_FONT_PATH;
   }
 
-  return isBold ? MALAYALAM_BOLD_FONT_PATH : MALAYALAM_REGULAR_FONT_PATH;
+  return NOTO_SANS_FONT_PATH;
+}
+
+function shouldStrokeSyntheticBold(text: string, layout: ResultTextBox, fontPath: string): boolean {
+  if (containsMalayalam(text) || layout.fontWeight < 700) {
+    return false;
+  }
+  return fontPath === NOTO_SANS_FONT_PATH || fontPath === MONTSERRAT_FONT_PATH || fontPath === INTER_FONT_PATH;
 }
 
 function safeSvgColor(color: string): string {
@@ -262,6 +286,9 @@ function renderTextElement(
   const pathLines = lines.map((line, index) => {
     const fontPath = fontPathForText(line, layout);
     const textToSvg = getTextToSvg(fontPath);
+    const syntheticStrokeWidth = shouldStrokeSyntheticBold(line, layout, fontPath)
+      ? Math.max(0.35, fontSize * 0.012)
+      : 0;
     return textToSvg.getPath(line, {
       x: textX,
       y: top + firstBaseline + index * lineHeight,
@@ -269,6 +296,14 @@ function renderTextElement(
       anchor,
       attributes: {
         fill: safeSvgColor(layout.color),
+        ...(syntheticStrokeWidth
+          ? {
+              stroke: safeSvgColor(layout.color),
+              "stroke-width": syntheticStrokeWidth,
+              "stroke-linejoin": "round",
+              "paint-order": "stroke fill",
+            }
+          : {}),
       },
     });
   }).join("");

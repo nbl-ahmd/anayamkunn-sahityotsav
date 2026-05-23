@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_SESSION_COOKIE_NAME, isValidAdminSessionToken } from "@/lib/admin-auth";
 import { UNIT_LIST } from "@/lib/constants";
+import { RESULT_FONT_VALUES } from "@/lib/results-fonts";
 import { getAdminResultsSnapshot, publishResult } from "@/lib/results-store";
 import {
   normalizeLayoutOverride as normalizeResultLayoutOverride,
@@ -50,11 +51,7 @@ function normalizeFontFamily(value: unknown, fallback: string): string {
     return fallback;
   }
   const font = value.trim();
-  return [
-    "Noto Sans",
-    "Noto Sans Malayalam",
-    "\"Cooper Black Poster\", serif",
-  ].includes(font)
+  return RESULT_FONT_VALUES.includes(font)
     ? font
     : fallback;
 }

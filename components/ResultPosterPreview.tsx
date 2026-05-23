@@ -36,7 +36,19 @@ function resolvePreviewFontFamily(fontFamily: string): string {
   if (fontFamily.includes("Cooper Black Poster")) {
     return '"Cooper Black Poster", serif';
   }
-  return "Noto Sans Malayalam";
+  if (fontFamily.includes("Poppins")) {
+    return "Poppins";
+  }
+  if (fontFamily.includes("Montserrat")) {
+    return "Montserrat";
+  }
+  if (fontFamily.includes("Inter")) {
+    return "Inter";
+  }
+  if (fontFamily.includes("Noto Sans Malayalam")) {
+    return "Noto Sans Malayalam";
+  }
+  return "Noto Sans";
 }
 
 export function ResultPosterPreview({

@@ -18,6 +18,7 @@ import {
 import { UNIT_LIST } from "@/lib/constants";
 import { downloadBlob } from "@/lib/client-utils";
 import { buildDefaultResultTemplate, clonePositionMarkers } from "@/lib/results-defaults";
+import { RESULT_FONT_OPTIONS } from "@/lib/results-fonts";
 import { positionFieldKeys } from "@/lib/results-layout";
 import {
   RESULT_CATEGORY_GROUPS,
@@ -1172,9 +1173,9 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                       >
                         <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Noto Sans Malayalam">Noto Sans Malayalam</SelectItem>
-                          <SelectItem value="Noto Sans">Noto Sans</SelectItem>
-                          <SelectItem value='"Cooper Black Poster", serif'>Cooper Black Poster</SelectItem>
+                          {RESULT_FONT_OPTIONS.map((font) => (
+                            <SelectItem key={font.value} value={font.value}>{font.label}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1411,6 +1412,17 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                       <div className="space-y-1.5">
                         <Label>Color</Label>
                         <Input type="color" value={marker.box.color} onChange={(event) => patchTemplateMarker(activeMarker, { ...marker, box: { ...marker.box, color: event.target.value } })} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Font Family</Label>
+                        <Select value={marker.box.fontFamily} onValueChange={(value) => patchTemplateMarker(activeMarker, { ...marker, box: { ...marker.box, fontFamily: value } })}>
+                          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {RESULT_FONT_OPTIONS.map((font) => (
+                              <SelectItem key={font.value} value={font.value}>{font.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                   ) : null}
