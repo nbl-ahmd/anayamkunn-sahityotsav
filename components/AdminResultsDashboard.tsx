@@ -114,7 +114,17 @@ function templateAppliesToProgram(template: ResultTemplateConfig, program: Resul
   return template.scopeValue === program.category || template.scopeValue === program.categoryGroup;
 }
 
+type ResultsStudioMode = "publish" | "templates";
+
 export function AdminResultsDashboard() {
+  return <ResultsStudio mode="publish" />;
+}
+
+export function ResultTemplatesManager() {
+  return <ResultsStudio mode="templates" />;
+}
+
+function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
   const [snapshot, setSnapshot] = useState<ResultsAdminSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -171,7 +181,7 @@ export function AdminResultsDashboard() {
   const ads = useMemo(() => snapshot?.ads ?? [], [snapshot?.ads]);
   const results = useMemo(() => snapshot?.results ?? [], [snapshot?.results]);
   const remainingPrograms = Math.max(0, programs.length - results.length);
-  const latestResult = results[0];
+  const activeTemplates = templates.filter((template) => template.active).length;
 
   const filteredPrograms = useMemo(
     () => programs.filter((program) => program.categoryGroup === category),
@@ -374,6 +384,60 @@ export function AdminResultsDashboard() {
   }, []);
   const templateScopeOptions = scopeTargets(programs, templateDraft.scopeType);
   const adScopeOptions = scopeTargets(programs, adDraft.scopeType);
+  const metricCards = mode === "publish"
+    ? [
+        {
+          label: "Published",
+          value: results.length,
+          detail: `${remainingPrograms} competitions pending`,
+          icon: BadgeCheck,
+          tone: "emerald" as const,
+        },
+        {
+          label: "Programs",
+          value: programs.length,
+          detail: "Loaded from valuation catalog",
+          icon: ListChecks,
+          tone: "sky" as const,
+        },
+        {
+          label: "Templates",
+          value: templates.length,
+          detail: "Available for result publishing",
+          icon: FileImage,
+          tone: "violet" as const,
+        },
+      ]
+    : [
+        {
+          label: "Poster Templates",
+          value: templates.length,
+          detail: `${activeTemplates} active template${activeTemplates === 1 ? "" : "s"}`,
+          icon: FileImage,
+          tone: "violet" as const,
+        },
+        {
+          label: "Catalog Programs",
+          value: programs.length,
+          detail: "Available for category and competition scoping",
+          icon: ListChecks,
+          tone: "sky" as const,
+        },
+        {
+          label: "Scoped Defaults",
+          value: templates.filter((template) => template.scopeType !== "global").length,
+          detail: "Category or competition specific designs",
+          icon: BadgeCheck,
+          tone: "emerald" as const,
+        },
+        {
+          label: "Ad Rules",
+          value: ads.length,
+          detail: "Range and scope based sponsor strips",
+          icon: Megaphone,
+          tone: "amber" as const,
+        },
+      ];
 
   if (loading && !snapshot) {
     return (
@@ -388,52 +452,42 @@ export function AdminResultsDashboard() {
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminMetricCard
-          label="Published"
-          value={results.length}
-          detail={`${remainingPrograms} competitions pending`}
-          icon={BadgeCheck}
-          tone="emerald"
-        />
-        <AdminMetricCard
-          label="Programs"
-          value={programs.length}
-          detail="Loaded from valuation catalog"
-          icon={ListChecks}
-          tone="sky"
-        />
-        <AdminMetricCard
-          label="Templates"
-          value={templates.length}
-          detail={latestResult ? `Latest: Result ${String(latestResult.resultNumber).padStart(2, "0")}` : "No published result yet"}
-          icon={FileImage}
-          tone="violet"
-        />
-        <AdminMetricCard
-          label="Ad Rules"
-          value={ads.length}
-          detail="Range and scope based sponsor strips"
-          icon={Megaphone}
-          tone="amber"
-        />
+      <section className={`grid gap-4 sm:grid-cols-2 ${mode === "publish" ? "xl:grid-cols-3" : "xl:grid-cols-4"}`}>
+        {metricCards.map((metric) => (
+          <AdminMetricCard key={metric.label} {...metric} />
+        ))}
       </section>
 
       <section className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-3">
-        {[
-          {
-            title: "1. Select program",
-            description: "Choose the public category group, then the exact internal competition category from the catalog.",
-          },
-          {
-            title: "2. Enter winners",
-            description: "Only names and units render on posters. Chest, code, and points stay internal for exports.",
-          },
-          {
-            title: "3. Publish poster",
-            description: "The server generates a consistent PNG with the selected template and active ad rule.",
-          },
-        ].map((item) => (
+        {(mode === "publish"
+          ? [
+              {
+                title: "1. Select program",
+                description: "Choose the category and competition, then select the best matching result template.",
+              },
+              {
+                title: "2. Enter winners",
+                description: "Only names and units render on posters. Chest, code, and points stay internal.",
+              },
+              {
+                title: "3. Preview and publish",
+                description: "Review the generated poster preview, then publish the official PNG.",
+              },
+            ]
+          : [
+              {
+                title: "1. Upload design",
+                description: "Add a poster background and keep the output ratio suitable for social sharing.",
+              },
+              {
+                title: "2. Configure fields",
+                description: "Position category, competition, result number, and winner text using safe boxes.",
+              },
+              {
+                title: "3. Assign ads",
+                description: "Attach sponsor strips by result-number range and optional category or competition scope.",
+              },
+            ]).map((item) => (
           <div key={item.title} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm font-black text-slate-950">{item.title}</p>
             <p className="mt-1 text-sm leading-6 text-slate-500">{item.description}</p>
@@ -441,15 +495,15 @@ export function AdminResultsDashboard() {
         ))}
       </section>
 
-      <Tabs defaultValue="publish" className="space-y-4">
+      <Tabs defaultValue={mode === "templates" ? "templates" : "publish"} className="space-y-4">
         <TabsList className="h-auto flex-wrap rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          <TabsTrigger value="publish"><Trophy className="h-4 w-4" /> Publish</TabsTrigger>
-          <TabsTrigger value="templates"><FileImage className="h-4 w-4" /> Templates</TabsTrigger>
-          <TabsTrigger value="ads"><Megaphone className="h-4 w-4" /> Ads</TabsTrigger>
-          <TabsTrigger value="published"><BadgeCheck className="h-4 w-4" /> Published</TabsTrigger>
+          {mode === "publish" ? <TabsTrigger value="publish"><Trophy className="h-4 w-4" /> Publish</TabsTrigger> : null}
+          {mode === "templates" ? <TabsTrigger value="templates"><FileImage className="h-4 w-4" /> Poster Templates</TabsTrigger> : null}
+          {mode === "templates" ? <TabsTrigger value="ads"><Megaphone className="h-4 w-4" /> Sponsor Ads</TabsTrigger> : null}
+          {mode === "publish" ? <TabsTrigger value="published"><BadgeCheck className="h-4 w-4" /> Published</TabsTrigger> : null}
         </TabsList>
 
-        <TabsContent value="publish" className="mt-4">
+        {mode === "publish" ? <TabsContent value="publish" className="mt-4">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_430px]">
             <Card>
               <CardHeader>
@@ -575,16 +629,16 @@ export function AdminResultsDashboard() {
               </Card>
             </div>
           </div>
-        </TabsContent>
+        </TabsContent> : null}
 
-        <TabsContent value="templates" className="mt-4">
+        {mode === "templates" ? <TabsContent value="templates" className="mt-4">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
             <Card>
               <CardHeader>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <CardTitle>Template Editor</CardTitle>
-                    <CardDescription>Upload a 1080x1080 design and position dynamic result fields inside safe boxes.</CardDescription>
+                    <CardDescription>Upload the poster design and position dynamic result fields inside safe boxes.</CardDescription>
                   </div>
                   <Button variant="outline" onClick={() => setTemplateDraft(buildFreshTemplate())}>
                     <Plus className="h-4 w-4" />
@@ -799,9 +853,9 @@ export function AdminResultsDashboard() {
               </CardContent>
             </Card>
           </div>
-        </TabsContent>
+        </TabsContent> : null}
 
-        <TabsContent value="ads" className="mt-4">
+        {mode === "templates" ? <TabsContent value="ads" className="mt-4">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
             <Card>
               <CardHeader>
@@ -895,9 +949,9 @@ export function AdminResultsDashboard() {
               </CardContent>
             </Card>
           </div>
-        </TabsContent>
+        </TabsContent> : null}
 
-        <TabsContent value="published" className="mt-4">
+        {mode === "publish" ? <TabsContent value="published" className="mt-4">
           <Card>
             <CardHeader>
               <CardTitle>Published Results</CardTitle>
@@ -924,7 +978,7 @@ export function AdminResultsDashboard() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent> : null}
       </Tabs>
     </div>
   );

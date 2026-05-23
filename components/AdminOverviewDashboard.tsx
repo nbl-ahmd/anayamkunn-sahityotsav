@@ -62,8 +62,8 @@ export async function AdminOverviewDashboard() {
     },
     {
       href: "/admin/templates",
-      title: "Frame Templates",
-      description: "Manage family frame overlays, typography, and public frame links.",
+      title: "Templates",
+      description: "Manage family frames, result poster designs, and sponsor ad rules.",
       icon: LayoutTemplate,
       stat: `${template.frames.length} frames`,
       tone: "bg-sky-50 text-sky-700 ring-sky-200",
@@ -108,7 +108,7 @@ export async function AdminOverviewDashboard() {
                 </Link>
               </Button>
               <Button asChild variant="outline" className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white">
-                <Link href="/admin/templates">Manage Frames</Link>
+                <Link href="/admin/templates">Manage Templates</Link>
               </Button>
             </div>
           </div>

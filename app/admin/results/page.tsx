@@ -14,8 +14,8 @@ export default async function AdminResultsPage() {
 
   return (
     <AdminShell
-      title="Results Dashboard"
-      subtitle="Publish official results, configure poster templates, and assign sponsor ads."
+      title="Publish Results"
+      subtitle="Enter winners, select a template, preview the poster, and publish official results."
     >
       <AdminResultsDashboard />
     </AdminShell>

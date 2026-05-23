@@ -31,8 +31,8 @@ interface AdminShellProps {
 
 const navItems = [
   { href: "/admin", label: "Overview", icon: BarChart3, exact: true },
-  { href: "/admin/templates", label: "Frame Templates", icon: LayoutTemplate },
-  { href: "/admin/results", label: "Results Studio", icon: Trophy },
+  { href: "/admin/templates", label: "Templates", icon: LayoutTemplate },
+  { href: "/admin/results", label: "Results", icon: Trophy },
   { href: "/admin/counts", label: "Manual Counts", icon: SlidersHorizontal },
   { href: "/admin/settings", label: "Settings", icon: CalendarDays },
 ];

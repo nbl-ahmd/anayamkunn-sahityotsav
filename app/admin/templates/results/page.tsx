@@ -1,10 +1,10 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AdminShell } from "@/components/AdminShell";
-import { AdminTemplatesHub } from "@/components/AdminTemplatesHub";
+import { ResultTemplatesManager } from "@/components/AdminResultsDashboard";
 import { ADMIN_SESSION_COOKIE_NAME, isValidAdminSessionToken } from "@/lib/admin-auth";
 
-export default async function AdminTemplatesPage() {
+export default async function AdminResultTemplatesPage() {
   const cookieStore = await cookies();
   const token = cookieStore.get(ADMIN_SESSION_COOKIE_NAME)?.value;
 
@@ -14,10 +14,10 @@ export default async function AdminTemplatesPage() {
 
   return (
     <AdminShell
-      title="Templates"
-      subtitle="Choose between family frame templates and result poster templates."
+      title="Result Templates"
+      subtitle="Configure result poster designs, dynamic text placement, and sponsor ad rules."
     >
-      <AdminTemplatesHub />
+      <ResultTemplatesManager />
     </AdminShell>
   );
 }
