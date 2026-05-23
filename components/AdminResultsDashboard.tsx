@@ -43,7 +43,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const noneValue = "__none__";
-const posterRenderVersion = "path-text-v2";
+const posterRenderVersion = "path-text-v3";
 
 const emptyEntries: ResultEntry[] = [1, 2, 3].map((position) => ({
   position: position as 1 | 2 | 3,
@@ -785,6 +785,17 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                             </SelectContent>
                           </Select>
                         </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Vertical</Label>
+                          <Select value={publishLayoutField.verticalAlign} onValueChange={(value) => patchPublishTarget({ verticalAlign: value as ResultTextBox["verticalAlign"] })}>
+                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="top">Top</SelectItem>
+                              <SelectItem value="middle">Middle</SelectItem>
+                              <SelectItem value="bottom">Bottom</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
 
                       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1048,10 +1059,8 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                         <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Noto Sans Malayalam">Noto Sans Malayalam</SelectItem>
-                          <SelectItem value="'Poppins', sans-serif">Poppins</SelectItem>
-                          <SelectItem value="'Montserrat', sans-serif">Montserrat</SelectItem>
-                          <SelectItem value="'Merriweather', serif">Merriweather</SelectItem>
-                          <SelectItem value="'Oswald', sans-serif">Oswald</SelectItem>
+                          <SelectItem value="Noto Sans">Noto Sans</SelectItem>
+                          <SelectItem value='"Cooper Black Poster", serif'>Cooper Black Poster</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1100,6 +1109,10 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                       <Input type="number" step="100" value={field.fontWeight} onChange={(event) => setTemplateDraft((prev) => ({ ...prev, fields: { ...prev.fields, [activeField]: { ...field, fontWeight: Number(event.target.value) } } }))} />
                     </div>
                     <div className="space-y-1.5">
+                      <Label>Line Height</Label>
+                      <Input type="number" step="0.05" value={field.lineHeight} onChange={(event) => setTemplateDraft((prev) => ({ ...prev, fields: { ...prev.fields, [activeField]: { ...field, lineHeight: Number(event.target.value) } } }))} />
+                    </div>
+                    <div className="space-y-1.5">
                       <Label>Align</Label>
                       <Select value={field.textAlign} onValueChange={(value) => setTemplateDraft((prev) => ({ ...prev, fields: { ...prev.fields, [activeField]: { ...field, textAlign: value as typeof field.textAlign } } }))}>
                         <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
@@ -1107,6 +1120,17 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                           <SelectItem value="left">Left</SelectItem>
                           <SelectItem value="center">Center</SelectItem>
                           <SelectItem value="right">Right</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Vertical</Label>
+                      <Select value={field.verticalAlign} onValueChange={(value) => setTemplateDraft((prev) => ({ ...prev, fields: { ...prev.fields, [activeField]: { ...field, verticalAlign: value as typeof field.verticalAlign } } }))}>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="top">Top</SelectItem>
+                          <SelectItem value="middle">Middle</SelectItem>
+                          <SelectItem value="bottom">Bottom</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

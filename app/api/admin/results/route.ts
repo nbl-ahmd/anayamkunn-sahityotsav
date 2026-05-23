@@ -42,6 +42,20 @@ function normalizeColor(value: unknown, fallback: string): string {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
 }
 
+function normalizeFontFamily(value: unknown, fallback: string): string {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const font = value.trim();
+  return [
+    "Noto Sans",
+    "Noto Sans Malayalam",
+    "\"Cooper Black Poster\", serif",
+  ].includes(font)
+    ? font
+    : fallback;
+}
+
 function normalizeTextBox(input: Partial<ResultTextBox> | undefined, fallback: ResultTextBox): ResultTextBox {
   const textAlign = input?.textAlign === "left" || input?.textAlign === "right" || input?.textAlign === "center"
     ? input.textAlign
@@ -58,7 +72,7 @@ function normalizeTextBox(input: Partial<ResultTextBox> | undefined, fallback: R
     height: clamp(Number(input?.height ?? fallback.height), 0.02, 1),
     fontSize: clamp(Math.round(Number(input?.fontSize ?? fallback.fontSize)), 8, 180),
     minFontSize: clamp(Math.round(Number(input?.minFontSize ?? fallback.minFontSize)), 8, 120),
-    fontFamily: fallback.fontFamily,
+    fontFamily: normalizeFontFamily(input?.fontFamily, fallback.fontFamily),
     fontWeight: clamp(Math.round(Number(input?.fontWeight ?? fallback.fontWeight)), 300, 900),
     color: normalizeColor(input?.color, fallback.color),
     lineHeight: clamp(Number(input?.lineHeight ?? fallback.lineHeight), 0.9, 1.8),

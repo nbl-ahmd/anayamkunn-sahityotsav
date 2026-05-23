@@ -16,6 +16,13 @@ interface ResultPosterPreviewProps {
   onFieldChange?: (key: ResultFieldKey, patch: Partial<ResultTextBox>) => void;
 }
 
+function resolvePreviewFontFamily(fontFamily: string): string {
+  if (fontFamily.includes("Cooper Black Poster")) {
+    return '"Cooper Black Poster", serif';
+  }
+  return "Noto Sans Malayalam";
+}
+
 export function ResultPosterPreview({
   template,
   values,
@@ -146,7 +153,7 @@ export function ResultPosterPreview({
                   width: `${layout.width * 100}%`,
                   height: `${layout.height * 100}%`,
                   color: layout.color,
-                  fontFamily: layout.fontFamily,
+                  fontFamily: resolvePreviewFontFamily(layout.fontFamily),
                   fontSize: Math.max(7, layout.fontSize * scale),
                   fontWeight: layout.fontWeight,
                   lineHeight: layout.lineHeight,

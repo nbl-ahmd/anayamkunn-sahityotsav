@@ -12,7 +12,6 @@ import {
   ResultTextBox,
 } from "@/lib/results-types";
 
-const LATIN_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSans-Regular.ttf");
 const COOPER_FONT_PATH = path.join(process.cwd(), "public/fonts/Cooper Black Regular.ttf");
 const MALAYALAM_REGULAR_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSansMalayalam-Regular.ttf");
 const MALAYALAM_BOLD_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSansMalayalam-Bold.ttf");
@@ -47,11 +46,16 @@ function containsMalayalam(text: string): boolean {
 }
 
 function fontPathForText(text: string, layout: Pick<ResultTextBox, "fontFamily" | "fontWeight">): string {
+  const family = layout.fontFamily.toLowerCase();
+  const isBold = layout.fontWeight >= 700;
   if (!containsMalayalam(text)) {
-    return layout.fontFamily.toLowerCase().includes("cooper") ? COOPER_FONT_PATH : LATIN_FONT_PATH;
+    if (family.includes("cooper")) {
+      return COOPER_FONT_PATH;
+    }
+    return isBold ? MALAYALAM_BOLD_FONT_PATH : MALAYALAM_REGULAR_FONT_PATH;
   }
 
-  return layout.fontWeight >= 700 ? MALAYALAM_BOLD_FONT_PATH : MALAYALAM_REGULAR_FONT_PATH;
+  return isBold ? MALAYALAM_BOLD_FONT_PATH : MALAYALAM_REGULAR_FONT_PATH;
 }
 
 function safeSvgColor(color: string): string {
@@ -251,9 +255,6 @@ function renderTextElement(
   const pathLines = lines.map((line, index) => {
     const fontPath = fontPathForText(line, layout);
     const textToSvg = getTextToSvg(fontPath);
-    const syntheticStrokeWidth = !containsMalayalam(line) && layout.fontWeight >= 700
-      ? Math.max(0.4, fontSize * 0.018)
-      : 0;
     return textToSvg.getPath(line, {
       x: textX,
       y: top + firstBaseline + index * lineHeight,
@@ -261,14 +262,6 @@ function renderTextElement(
       anchor,
       attributes: {
         fill: safeSvgColor(layout.color),
-        ...(syntheticStrokeWidth
-          ? {
-              stroke: safeSvgColor(layout.color),
-              "stroke-width": syntheticStrokeWidth,
-              "stroke-linejoin": "round",
-              "paint-order": "stroke fill",
-            }
-          : {}),
       },
     });
   }).join("");
