@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_SESSION_COOKIE_NAME, isValidAdminSessionToken } from "@/lib/admin-auth";
 import { UNIT_LIST } from "@/lib/constants";
 import { RESULT_FONT_VALUES } from "@/lib/results-fonts";
-import { clearPublishedResults, deletePublishedResult, getAdminResultsSnapshot, publishResult } from "@/lib/results-store";
+import {
+  clearPublishedResults,
+  deletePublishedResult,
+  getAdminResultsSnapshot,
+  publishResult,
+  updatePublishedResultStatus,
+} from "@/lib/results-store";
 import {
   normalizeLayoutOverride as normalizeResultLayoutOverride,
   normalizePositionMarkers,
@@ -130,6 +136,7 @@ export async function POST(req: NextRequest) {
           position as 1 | 2 | 3,
         ),
       ),
+      status: body.status === "submitted" ? "submitted" : "published",
     };
 
     if (!input.programId) {
@@ -144,6 +151,27 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("Failed to publish result", error);
     return NextResponse.json({ error: "Failed to publish result" }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    if (!isAuthorized(req)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json() as { ids?: unknown; status?: unknown };
+    const ids = Array.isArray(body.ids) ? body.ids.filter((id) => typeof id === "string") as string[] : [];
+    const status = body.status === "submitted" ? "submitted" : body.status === "published" ? "published" : null;
+    if (!status || !ids.length) {
+      return NextResponse.json({ error: "Invalid status update" }, { status: 400 });
+    }
+
+    await updatePublishedResultStatus({ ids, status });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Failed to update result status", error);
+    return NextResponse.json({ error: "Failed to update result status" }, { status: 500 });
   }
 }
 

@@ -290,7 +290,8 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
       return leftTime - rightTime;
     });
   }, [results]);
-  const remainingPrograms = Math.max(0, programs.length - results.length);
+  const publishedCount = results.filter((result) => result.status === "published").length;
+  const remainingPrograms = Math.max(0, programs.length - publishedCount);
   const activeTemplates = templates.filter((template) => template.active).length;
 
   const filteredPrograms = useMemo(
@@ -570,7 +571,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
     }
   };
 
-  const publish = async () => {
+  const publish = async (status: "published" | "submitted") => {
     if (!selectedProgram) return;
     setSaving(true);
     try {
@@ -584,6 +585,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
             ? publishLayoutDraft
             : existingSelectedResult?.layoutOverride ?? null,
           entries,
+          status,
         }),
       });
       if (!response.ok) {
@@ -593,9 +595,11 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
       const data = await response.json() as { result: ResultsAdminSnapshot["results"][number] };
       const variantCount = data.result.posterVariants?.length ?? 1;
       toast.success(
-        variantCount > 1
-          ? `Result published with ${variantCount} poster designs.`
-          : "Result published and poster generated.",
+        status === "submitted"
+          ? "Result saved as submitted."
+          : variantCount > 1
+            ? `Result published with ${variantCount} poster designs.`
+            : "Result published and poster generated.",
       );
       setEntries(emptyEntries);
       setVisiblePositions({ 2: true, 3: true });
@@ -625,6 +629,31 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not clear published results.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateResultStatus = async (ids: string[], status: "published" | "submitted") => {
+    if (!ids.length) {
+      toast.error("Select at least one result.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await fetch("/api/admin/results", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, status }),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error ?? "Status update failed");
+      }
+      toast.success(`Updated ${ids.length} result${ids.length === 1 ? "" : "s"}.`);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update status.");
     } finally {
       setSaving(false);
     }
@@ -810,7 +839,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
     ? [
         {
           label: "Published",
-          value: results.length,
+          value: publishedCount,
           detail: `${remainingPrograms} competitions pending`,
           icon: BadgeCheck,
           tone: "emerald" as const,
@@ -1163,10 +1192,25 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                   })}
                 </div>
 
-                <Button onClick={publish} disabled={saving || !selectedProgram} className="w-full sm:w-auto">
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Publish Result
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => publish("submitted")}
+                    disabled={saving || !selectedProgram}
+                    className="w-full sm:w-auto"
+                  >
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    Save & Hold
+                  </Button>
+                  <Button
+                    onClick={() => publish("published")}
+                    disabled={saving || !selectedProgram}
+                    className="w-full sm:w-auto"
+                  >
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    Publish Result
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 
@@ -1812,8 +1856,8 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
             <CardHeader>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <CardTitle>Published Results</CardTitle>
-                  <CardDescription>Generated posters are locked to their result number and assigned ad.</CardDescription>
+                  <CardTitle>Results</CardTitle>
+                  <CardDescription>Submitted results are hidden from the public until published.</CardDescription>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {orderedResults.length ? (
@@ -1821,6 +1865,20 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                       Clear All
                     </Button>
                   ) : null}
+                  <Button
+                    variant="outline"
+                    onClick={() => updateResultStatus(Array.from(selectedResultIds), "submitted")}
+                    disabled={!selectedResultIds.size || saving}
+                  >
+                    Hold Selected
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => updateResultStatus(Array.from(selectedResultIds), "published")}
+                    disabled={!selectedResultIds.size || saving}
+                  >
+                    Publish Selected
+                  </Button>
                   <Button onClick={downloadSelectedPosters} disabled={!selectedResultIds.size}>
                     Download Selected
                   </Button>
@@ -1878,12 +1936,27 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
                             Order #{index + 1}
                           </span>
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${result.status === "published" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                            {result.status === "published" ? "Published" : "Submitted"}
+                          </span>
                         </div>
                         <p className="text-sm text-slate-500">{result.category} · {new Date(result.publishedAt).toLocaleString()}</p>
                       </div>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Select
+                      value={result.status}
+                      onValueChange={(value) => updateResultStatus([result.id], value as "published" | "submitted")}
+                    >
+                      <SelectTrigger className="h-9 w-[140px] bg-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="published">Published</SelectItem>
+                        <SelectItem value="submitted">Submitted</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Button variant="outline" onClick={() => window.open(posterUrlForResult(result), "_blank", "noopener,noreferrer")}>Open</Button>
                     <Button variant="outline" onClick={() => editPublishedResult(result)}>Edit</Button>
                     <Button variant="outline" onClick={() => deletePublishedResult(result)} disabled={saving}>Delete</Button>

@@ -54,6 +54,15 @@ export async function deletePublishedResult(resultId: string): Promise<void> {
     : fileStore.deletePublishedResult(resultId);
 }
 
+export async function updatePublishedResultStatus(input: {
+  ids: string[];
+  status: "published" | "submitted";
+}): Promise<void> {
+  return shouldUsePostgres()
+    ? postgresStore.updatePublishedResultStatus(input)
+    : fileStore.updatePublishedResultStatus(input);
+}
+
 export async function renderPublishedResultPoster(input: {
   resultId: string;
   templateId?: string;

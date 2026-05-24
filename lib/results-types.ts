@@ -136,6 +136,8 @@ export interface ResultEntry {
   points: string;
 }
 
+export type ResultStatus = "published" | "submitted";
+
 export interface PublishedResult {
   id: string;
   programId: string;
@@ -149,7 +151,7 @@ export interface PublishedResult {
   adId: string | null;
   posterImageUrl: string;
   posterVariants: ResultPosterVariant[];
-  status: "published";
+  status: ResultStatus;
   publishedAt: string;
   createdAt: string;
   updatedAt: string;
@@ -202,6 +204,7 @@ export interface PublishResultInput {
   entries: ResultEntry[];
   templateId?: string;
   layoutOverride?: ResultLayoutOverride | ResultTemplateFields | null;
+  status?: ResultStatus;
 }
 
 export interface SaveResultTemplateInput {

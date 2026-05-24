@@ -383,7 +383,7 @@ function rowToResult(row: ResultRow): PublishedResult | null {
     adId: row.ad_id,
     posterImageUrl: row.poster_image_url || posterVariants[0]?.imageUrl || "",
     posterVariants,
-    status: "published",
+    status: row.status === "submitted" ? "submitted" : "published",
     publishedAt: toIso(row.published_at),
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
@@ -561,9 +561,10 @@ export async function getAdminResultsSnapshot(): Promise<ResultsAdminSnapshot> {
 export async function getPublicResultsSnapshot(): Promise<ResultsPublicSnapshot> {
   await ensureSchema();
   const [templates, results] = await Promise.all([getTemplates(), getResults()]);
+  const publishedResults = results.filter((result) => result.status === "published");
   return {
-    programs: RESULT_PROGRAMS.filter((program) => results.some((result) => result.programId === program.id)),
-    results,
+    programs: RESULT_PROGRAMS.filter((program) => publishedResults.some((result) => result.programId === program.id)),
+    results: publishedResults,
     templates: templates.filter((template) => template.active),
   };
 }
@@ -725,6 +726,8 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
   const template = resultTemplates[0];
   const ad = existing?.adId ? ads.find((item) => item.id === existing.adId) ?? null : resolveAd(ads, resultNumber, program.id);
   const now = new Date().toISOString();
+  const status = input.status ?? "published";
+  const shouldSetPublishedAt = status === "published" && existing?.status !== "published";
   const result: PublishedResult = {
     id: existing?.id ?? randomUUID(),
     programId: program.id,
@@ -742,8 +745,8 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
     adId: ad?.id ?? null,
     posterImageUrl: existing?.posterImageUrl ?? "",
     posterVariants: existing?.posterVariants ?? [],
-    status: "published",
-    publishedAt: existing?.publishedAt ?? now,
+    status,
+    publishedAt: shouldSetPublishedAt ? now : existing?.publishedAt ?? now,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
@@ -829,6 +832,31 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
   `;
 
   return result;
+}
+
+export async function updatePublishedResultStatus(input: {
+  ids: string[];
+  status: "published" | "submitted";
+}): Promise<void> {
+  await ensureSchema();
+  const ids = Array.from(new Set(input.ids)).filter(Boolean);
+  if (!ids.length) {
+    return;
+  }
+  const sql = getSql();
+  const now = new Date().toISOString();
+
+  await sql`
+    UPDATE published_results
+    SET
+      status = ${input.status},
+      published_at = CASE
+        WHEN ${input.status} = 'published' AND status <> 'published' THEN ${now}
+        ELSE published_at
+      END,
+      updated_at = ${now}
+    WHERE id = ANY(${ids}::uuid[])
+  `;
 }
 
 export async function clearPublishedResults(): Promise<void> {

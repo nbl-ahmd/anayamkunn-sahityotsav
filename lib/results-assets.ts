@@ -22,6 +22,7 @@ export async function persistGeneratedResultPoster(input: {
     const blob = await put(key, input.buffer, {
       access: "public",
       addRandomSuffix: false,
+      allowOverwrite: true,
       contentType: "image/png",
       token: process.env.BLOB_READ_WRITE_TOKEN,
     });

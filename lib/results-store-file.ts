@@ -222,7 +222,7 @@ function normalizeResult(input: unknown): PublishedResult | null {
     adId: typeof result.adId === "string" && result.adId ? result.adId : null,
     posterImageUrl: posterImageUrl || posterVariants[0]?.imageUrl || "",
     posterVariants,
-    status: "published",
+    status: result.status === "submitted" ? "submitted" : "published",
     publishedAt: validIso(result.publishedAt) ?? now,
     createdAt: validIso(result.createdAt) ?? now,
     updatedAt: validIso(result.updatedAt) ?? now,
@@ -401,7 +401,9 @@ export async function getAdminResultsSnapshot(): Promise<ResultsAdminSnapshot> {
 
 export async function getPublicResultsSnapshot(): Promise<ResultsPublicSnapshot> {
   const store = await readStore();
-  const results = [...store.results].sort((left, right) => right.resultNumber - left.resultNumber);
+  const results = [...store.results]
+    .filter((result) => result.status === "published")
+    .sort((left, right) => right.resultNumber - left.resultNumber);
   return {
     programs: RESULT_PROGRAMS.filter((program) => results.some((result) => result.programId === program.id)),
     results,
@@ -468,6 +470,8 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
       ? store.ads.find((item) => item.id === existing.adId) ?? null
       : resolveAd(store.ads, resultNumber, program.id);
 
+    const status = input.status ?? "published";
+    const shouldSetPublishedAt = status === "published" && existing?.status !== "published";
     const result: PublishedResult = {
       id: existing?.id ?? randomUUID(),
       programId: program.id,
@@ -485,8 +489,8 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
       adId: ad?.id ?? null,
       posterImageUrl: existing?.posterImageUrl ?? "",
       posterVariants: existing?.posterVariants ?? [],
-      status: "published",
-      publishedAt: existing?.publishedAt ?? now,
+      status,
+      publishedAt: shouldSetPublishedAt ? now : existing?.publishedAt ?? now,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };
@@ -528,6 +532,32 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
     }
 
     return result;
+  });
+}
+
+export async function updatePublishedResultStatus(input: {
+  ids: string[];
+  status: "published" | "submitted";
+}): Promise<void> {
+  const ids = Array.from(new Set(input.ids)).filter(Boolean);
+  if (!ids.length) {
+    return;
+  }
+
+  await withStoreMutation(async (store) => {
+    const now = new Date().toISOString();
+    store.results = store.results.map((result) => {
+      if (!ids.includes(result.id)) {
+        return result;
+      }
+      const shouldSetPublishedAt = input.status === "published" && result.status !== "published";
+      return {
+        ...result,
+        status: input.status,
+        publishedAt: shouldSetPublishedAt ? now : result.publishedAt,
+        updatedAt: now,
+      };
+    });
   });
 }
 
