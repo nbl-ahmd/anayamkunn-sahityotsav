@@ -32,8 +32,6 @@ function templateApplies(template: ResultTemplateConfig, result: PublishedResult
 
 const selectClass =
   "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200";
-const posterRenderVersion = "path-marker-v3";
-
 export function ResultsBrowser({ snapshot }: { snapshot: ResultsPublicSnapshot }) {
   const firstCategory = snapshot.programs[0]?.categoryGroup ?? "General";
   const [category, setCategory] = useState<string>(firstCategory);
@@ -66,9 +64,7 @@ export function ResultsBrowser({ snapshot }: { snapshot: ResultsPublicSnapshot }
   }, [result, snapshot.templates]);
 
   const activeTemplateId = templateId || result?.templateId || templates[0]?.id || "";
-  const posterUrl = result
-    ? `/api/results/${result.id}/poster?templateId=${encodeURIComponent(activeTemplateId)}&v=${posterRenderVersion}`
-    : "";
+  const posterUrl = result?.posterImageUrl ?? "";
 
   const onCategoryChange = (next: string) => {
     setCategory(next);
@@ -188,6 +184,7 @@ export function ResultsBrowser({ snapshot }: { snapshot: ResultsPublicSnapshot }
                   value={activeTemplateId}
                   onChange={(event) => setTemplateId(event.target.value)}
                   className={selectClass}
+                  disabled
                 >
                   {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
                 </select>

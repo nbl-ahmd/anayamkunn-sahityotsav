@@ -50,7 +50,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const noneValue = "__none__";
-const posterRenderVersion = "path-marker-v3";
+const posterRenderVersion = "path-marker-v4";
 
 const emptyEntries: ResultEntry[] = [1, 2, 3].map((position) => ({
   position: position as 1 | 2 | 3,
@@ -641,7 +641,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
   };
 
   const posterUrlForResult = (result: ResultsAdminSnapshot["results"][number]) =>
-    `/api/results/${result.id}/poster?templateId=${encodeURIComponent(result.templateId)}&v=${posterRenderVersion}`;
+    result.posterImageUrl || `/api/results/${result.id}/poster?templateId=${encodeURIComponent(result.templateId)}&v=${posterRenderVersion}`;
 
   const templateLayoutReferenceKey = templateLayoutTarget === "winnerNames"
     ? "firstName"

@@ -16,13 +16,53 @@ import {
 } from "@/lib/results-types";
 
 const COOPER_FONT_PATH = path.join(process.cwd(), "public/fonts/Cooper Black Regular.ttf");
-const NOTO_SANS_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSans-Regular.ttf");
-const MALAYALAM_REGULAR_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSansMalayalam-Regular.ttf");
-const MALAYALAM_BOLD_FONT_PATH = path.join(process.cwd(), "public/fonts/NotoSansMalayalam-Bold.ttf");
-const POPPINS_REGULAR_FONT_PATH = path.join(process.cwd(), "public/fonts/Poppins-Regular.ttf");
-const POPPINS_BOLD_FONT_PATH = path.join(process.cwd(), "public/fonts/Poppins-Bold.ttf");
-const MONTSERRAT_FONT_PATH = path.join(process.cwd(), "public/fonts/Montserrat.ttf");
-const INTER_FONT_PATH = path.join(process.cwd(), "public/fonts/Inter.ttf");
+const SUPPORTED_FONT_WEIGHTS = [300, 400, 500, 600, 700, 800, 900] as const;
+
+const NOTO_SANS_FONT_PATHS = {
+  300: path.join(process.cwd(), "public/fonts/NotoSans-300.ttf"),
+  400: path.join(process.cwd(), "public/fonts/NotoSans-400.ttf"),
+  500: path.join(process.cwd(), "public/fonts/NotoSans-500.ttf"),
+  600: path.join(process.cwd(), "public/fonts/NotoSans-600.ttf"),
+  700: path.join(process.cwd(), "public/fonts/NotoSans-700.ttf"),
+  800: path.join(process.cwd(), "public/fonts/NotoSans-800.ttf"),
+  900: path.join(process.cwd(), "public/fonts/NotoSans-900.ttf"),
+};
+const MALAYALAM_FONT_PATHS = {
+  300: path.join(process.cwd(), "public/fonts/NotoSansMalayalam-300.ttf"),
+  400: path.join(process.cwd(), "public/fonts/NotoSansMalayalam-400.ttf"),
+  500: path.join(process.cwd(), "public/fonts/NotoSansMalayalam-500.ttf"),
+  600: path.join(process.cwd(), "public/fonts/NotoSansMalayalam-600.ttf"),
+  700: path.join(process.cwd(), "public/fonts/NotoSansMalayalam-700.ttf"),
+  800: path.join(process.cwd(), "public/fonts/NotoSansMalayalam-800.ttf"),
+  900: path.join(process.cwd(), "public/fonts/NotoSansMalayalam-900.ttf"),
+};
+const POPPINS_FONT_PATHS = {
+  300: path.join(process.cwd(), "public/fonts/Poppins-Light.ttf"),
+  400: path.join(process.cwd(), "public/fonts/Poppins-Regular.ttf"),
+  500: path.join(process.cwd(), "public/fonts/Poppins-Medium.ttf"),
+  600: path.join(process.cwd(), "public/fonts/Poppins-SemiBold.ttf"),
+  700: path.join(process.cwd(), "public/fonts/Poppins-Bold.ttf"),
+  800: path.join(process.cwd(), "public/fonts/Poppins-ExtraBold.ttf"),
+  900: path.join(process.cwd(), "public/fonts/Poppins-Black.ttf"),
+};
+const MONTSERRAT_FONT_PATHS = {
+  300: path.join(process.cwd(), "public/fonts/Montserrat-300.ttf"),
+  400: path.join(process.cwd(), "public/fonts/Montserrat-400.ttf"),
+  500: path.join(process.cwd(), "public/fonts/Montserrat-500.ttf"),
+  600: path.join(process.cwd(), "public/fonts/Montserrat-600.ttf"),
+  700: path.join(process.cwd(), "public/fonts/Montserrat-700.ttf"),
+  800: path.join(process.cwd(), "public/fonts/Montserrat-800.ttf"),
+  900: path.join(process.cwd(), "public/fonts/Montserrat-900.ttf"),
+};
+const INTER_FONT_PATHS = {
+  300: path.join(process.cwd(), "public/fonts/Inter-300.ttf"),
+  400: path.join(process.cwd(), "public/fonts/Inter-400.ttf"),
+  500: path.join(process.cwd(), "public/fonts/Inter-500.ttf"),
+  600: path.join(process.cwd(), "public/fonts/Inter-600.ttf"),
+  700: path.join(process.cwd(), "public/fonts/Inter-700.ttf"),
+  800: path.join(process.cwd(), "public/fonts/Inter-800.ttf"),
+  900: path.join(process.cwd(), "public/fonts/Inter-900.ttf"),
+};
 
 const textToSvgCache = new Map<string, TextToSVG.Instance>();
 
@@ -53,36 +93,36 @@ function containsMalayalam(text: string): boolean {
   return /[\u0d00-\u0d7f]/.test(text);
 }
 
+function nearestSupportedFontWeight(fontWeight: number): keyof typeof NOTO_SANS_FONT_PATHS {
+  const normalized = Math.round(fontWeight / 100) * 100;
+  return SUPPORTED_FONT_WEIGHTS.reduce((nearest, weight) =>
+    Math.abs(weight - normalized) < Math.abs(nearest - normalized) ? weight : nearest,
+  400);
+}
+
 function fontPathForText(text: string, layout: Pick<ResultTextBox, "fontFamily" | "fontWeight">): string {
   const family = layout.fontFamily.toLowerCase();
-  const isBold = layout.fontWeight >= 700;
+  const weight = nearestSupportedFontWeight(layout.fontWeight);
   if (containsMalayalam(text)) {
-    return isBold ? MALAYALAM_BOLD_FONT_PATH : MALAYALAM_REGULAR_FONT_PATH;
+    return MALAYALAM_FONT_PATHS[weight];
   }
   if (family.includes("cooper")) {
     return COOPER_FONT_PATH;
   }
   if (family.includes("poppins")) {
-    return isBold ? POPPINS_BOLD_FONT_PATH : POPPINS_REGULAR_FONT_PATH;
+    return POPPINS_FONT_PATHS[weight];
   }
   if (family.includes("montserrat")) {
-    return MONTSERRAT_FONT_PATH;
+    return MONTSERRAT_FONT_PATHS[weight];
   }
   if (family.includes("inter")) {
-    return INTER_FONT_PATH;
+    return INTER_FONT_PATHS[weight];
   }
   if (family.includes("noto sans malayalam")) {
-    return isBold ? MALAYALAM_BOLD_FONT_PATH : MALAYALAM_REGULAR_FONT_PATH;
+    return MALAYALAM_FONT_PATHS[weight];
   }
 
-  return NOTO_SANS_FONT_PATH;
-}
-
-function shouldStrokeSyntheticBold(text: string, layout: ResultTextBox, fontPath: string): boolean {
-  if (containsMalayalam(text) || layout.fontWeight < 700) {
-    return false;
-  }
-  return fontPath === NOTO_SANS_FONT_PATH || fontPath === MONTSERRAT_FONT_PATH || fontPath === INTER_FONT_PATH;
+  return NOTO_SANS_FONT_PATHS[weight];
 }
 
 function safeSvgColor(color: string): string {
@@ -286,9 +326,6 @@ function renderTextElement(
   const pathLines = lines.map((line, index) => {
     const fontPath = fontPathForText(line, layout);
     const textToSvg = getTextToSvg(fontPath);
-    const syntheticStrokeWidth = shouldStrokeSyntheticBold(line, layout, fontPath)
-      ? Math.max(0.35, fontSize * 0.012)
-      : 0;
     return textToSvg.getPath(line, {
       x: textX,
       y: top + firstBaseline + index * lineHeight,
@@ -296,14 +333,6 @@ function renderTextElement(
       anchor,
       attributes: {
         fill: safeSvgColor(layout.color),
-        ...(syntheticStrokeWidth
-          ? {
-              stroke: safeSvgColor(layout.color),
-              "stroke-width": syntheticStrokeWidth,
-              "stroke-linejoin": "round",
-              "paint-order": "stroke fill",
-            }
-          : {}),
       },
     });
   }).join("");
