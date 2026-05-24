@@ -947,11 +947,43 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
       </section>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="h-auto flex-wrap rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          {mode === "publish" ? <TabsTrigger value="publish"><Trophy className="h-4 w-4" /> Publish</TabsTrigger> : null}
-          {mode === "templates" ? <TabsTrigger value="templates"><FileImage className="h-4 w-4" /> Poster Templates</TabsTrigger> : null}
-          {mode === "templates" ? <TabsTrigger value="ads"><Megaphone className="h-4 w-4" /> Sponsor Ads</TabsTrigger> : null}
-          {mode === "publish" ? <TabsTrigger value="published"><BadgeCheck className="h-4 w-4" /> Published</TabsTrigger> : null}
+        <TabsList className="grid w-full grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm sm:flex sm:w-fit sm:flex-nowrap">
+          {mode === "publish" ? (
+            <TabsTrigger
+              value="publish"
+              className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold sm:text-sm"
+            >
+              <Trophy className="h-4 w-4" />
+              Publish
+            </TabsTrigger>
+          ) : null}
+          {mode === "templates" ? (
+            <TabsTrigger
+              value="templates"
+              className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold sm:text-sm"
+            >
+              <FileImage className="h-4 w-4" />
+              Templates
+            </TabsTrigger>
+          ) : null}
+          {mode === "templates" ? (
+            <TabsTrigger
+              value="ads"
+              className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold sm:text-sm"
+            >
+              <Megaphone className="h-4 w-4" />
+              Ads
+            </TabsTrigger>
+          ) : null}
+          {mode === "publish" ? (
+            <TabsTrigger
+              value="published"
+              className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold sm:text-sm"
+            >
+              <BadgeCheck className="h-4 w-4" />
+              Published
+            </TabsTrigger>
+          ) : null}
         </TabsList>
 
         {mode === "publish" ? <TabsContent value="publish" className="mt-4">
@@ -1861,7 +1893,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {orderedResults.length ? (
-                    <Button variant="outline" onClick={clearPublishedResults} disabled={saving}>
+                    <Button variant="outline" onClick={clearPublishedResults} disabled={saving} className="w-full sm:w-auto">
                       Clear All
                     </Button>
                   ) : null}
@@ -1869,6 +1901,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                     variant="outline"
                     onClick={() => updateResultStatus(Array.from(selectedResultIds), "submitted")}
                     disabled={!selectedResultIds.size || saving}
+                    className="w-full sm:w-auto"
                   >
                     Hold Selected
                   </Button>
@@ -1876,10 +1909,11 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                     variant="outline"
                     onClick={() => updateResultStatus(Array.from(selectedResultIds), "published")}
                     disabled={!selectedResultIds.size || saving}
+                    className="w-full sm:w-auto"
                   >
                     Publish Selected
                   </Button>
-                  <Button onClick={downloadSelectedPosters} disabled={!selectedResultIds.size}>
+                  <Button onClick={downloadSelectedPosters} disabled={!selectedResultIds.size} className="w-full sm:w-auto">
                     Download Selected
                   </Button>
                 </div>
@@ -1898,7 +1932,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                           placeholder="From order #"
                           value={rangeStart}
                           onChange={(event) => setRangeStart(event.target.value)}
-                          className="w-[120px]"
+                          className="w-full sm:w-[120px]"
                         />
                         <Input
                           type="number"
@@ -1906,16 +1940,16 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                           placeholder="To order #"
                           value={rangeEnd}
                           onChange={(event) => setRangeEnd(event.target.value)}
-                          className="w-[120px]"
+                          className="w-full sm:w-[120px]"
                         />
-                        <Button variant="outline" onClick={applyRangeSelection}>
+                        <Button variant="outline" onClick={applyRangeSelection} className="w-full sm:w-auto">
                           Select Range
                         </Button>
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" onClick={selectAllResults}>Select All</Button>
-                      <Button variant="ghost" onClick={clearSelection}>Clear</Button>
+                      <Button variant="outline" onClick={selectAllResults} className="w-full sm:w-auto">Select All</Button>
+                      <Button variant="ghost" onClick={clearSelection} className="w-full sm:w-auto">Clear</Button>
                     </div>
                   </div>
                 </div>
@@ -1949,7 +1983,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                       value={result.status}
                       onValueChange={(value) => updateResultStatus([result.id], value as "published" | "submitted")}
                     >
-                      <SelectTrigger className="h-9 w-[140px] bg-white">
+                      <SelectTrigger className="h-9 w-full bg-white sm:w-[140px]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1957,10 +1991,10 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                         <SelectItem value="submitted">Submitted</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button variant="outline" onClick={() => window.open(posterUrlForResult(result), "_blank", "noopener,noreferrer")}>Open</Button>
-                    <Button variant="outline" onClick={() => editPublishedResult(result)}>Edit</Button>
-                    <Button variant="outline" onClick={() => deletePublishedResult(result)} disabled={saving}>Delete</Button>
-                    <Button onClick={() => downloadPoster(posterUrlForResult(result), `result-${result.resultNumber}`)}>Download</Button>
+                    <Button variant="outline" onClick={() => window.open(posterUrlForResult(result), "_blank", "noopener,noreferrer")} className="w-full sm:w-auto">Open</Button>
+                    <Button variant="outline" onClick={() => editPublishedResult(result)} className="w-full sm:w-auto">Edit</Button>
+                    <Button variant="outline" onClick={() => deletePublishedResult(result)} disabled={saving} className="w-full sm:w-auto">Delete</Button>
+                    <Button onClick={() => downloadPoster(posterUrlForResult(result), `result-${result.resultNumber}`)} className="w-full sm:w-auto">Download</Button>
                   </div>
                 </div>
               )) : (
