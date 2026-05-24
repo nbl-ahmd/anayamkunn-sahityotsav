@@ -19,7 +19,7 @@ import { UNIT_LIST } from "@/lib/constants";
 import { downloadBlob } from "@/lib/client-utils";
 import { buildDefaultResultTemplate, clonePositionMarkers } from "@/lib/results-defaults";
 import { RESULT_FONT_OPTIONS } from "@/lib/results-fonts";
-import { positionFieldKeys } from "@/lib/results-layout";
+import { applyLayoutOverride, positionFieldKeys } from "@/lib/results-layout";
 import {
   RESULT_CATEGORY_GROUPS,
   RESULT_FIELD_KEYS,
@@ -50,7 +50,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const noneValue = "__none__";
-const posterRenderVersion = "path-marker-v1";
+const posterRenderVersion = "path-marker-v3";
 
 const emptyEntries: ResultEntry[] = [1, 2, 3].map((position) => ({
   position: position as 1 | 2 | 3,
@@ -301,25 +301,30 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
     return selectedTemplate ?? matchingTemplates[0] ?? templates[0] ?? buildDefaultResultTemplate();
   }, [matchingTemplates, templateId, templates]);
 
-  useEffect(() => {
-    if (publishLayoutOpen) {
-      setPublishLayoutDraft(cloneLayout(publishBaseTemplate));
-    }
-  }, [publishBaseTemplate, publishLayoutOpen]);
-
-  const publishPreviewTemplate = useMemo<ResultTemplateConfig>(() => ({
-    ...publishBaseTemplate,
-    fields: publishLayoutOpen && publishLayoutDraft ? publishLayoutDraft.fields : publishBaseTemplate.fields,
-    positionMarkers:
-      publishLayoutOpen && publishLayoutDraft?.positionMarkers
-        ? publishLayoutDraft.positionMarkers
-        : publishBaseTemplate.positionMarkers,
-  }), [publishBaseTemplate, publishLayoutDraft, publishLayoutOpen]);
-
   const existingSelectedResult = useMemo(
     () => results.find((result) => result.programId === selectedProgram?.id),
     [results, selectedProgram?.id],
   );
+
+  const publishBaseTemplateWithOverride = useMemo(
+    () => applyLayoutOverride(publishBaseTemplate, existingSelectedResult?.layoutOverride ?? null),
+    [existingSelectedResult?.layoutOverride, publishBaseTemplate],
+  );
+
+  useEffect(() => {
+    if (publishLayoutOpen) {
+      setPublishLayoutDraft(cloneLayout(publishBaseTemplateWithOverride));
+    }
+  }, [publishBaseTemplateWithOverride, publishLayoutOpen]);
+
+  const publishPreviewTemplate = useMemo<ResultTemplateConfig>(() => ({
+    ...publishBaseTemplateWithOverride,
+    fields: publishLayoutOpen && publishLayoutDraft ? publishLayoutDraft.fields : publishBaseTemplateWithOverride.fields,
+    positionMarkers:
+      publishLayoutOpen && publishLayoutDraft?.positionMarkers
+        ? publishLayoutDraft.positionMarkers
+        : publishBaseTemplateWithOverride.positionMarkers,
+  }), [publishBaseTemplateWithOverride, publishLayoutDraft, publishLayoutOpen]);
 
   const publishPreviewResultNumber = existingSelectedResult?.resultNumber ?? results.length + 1;
   const publishPreviewAd = useMemo(() => {
@@ -382,7 +387,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
 
   const setPublishLayoutEnabled = (enabled: boolean) => {
     setPublishLayoutOpen(enabled);
-    setPublishLayoutDraft(enabled ? cloneLayout(publishBaseTemplate) : null);
+    setPublishLayoutDraft(enabled ? cloneLayout(publishBaseTemplateWithOverride) : null);
   };
 
   const publishTargetFields = useMemo(() => {
@@ -397,7 +402,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
 
   const patchPublishField = (key: ResultFieldKey, patch: Partial<ResultTextBox>) => {
     setPublishLayoutDraft((current) => {
-      const draft = current ?? cloneLayout(publishBaseTemplate);
+      const draft = current ?? cloneLayout(publishBaseTemplateWithOverride);
       return {
         ...draft,
         fields: {
@@ -413,7 +418,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
 
   const patchPublishTarget = (patch: Partial<ResultTextBox>) => {
     setPublishLayoutDraft((current) => {
-      const draft = current ?? cloneLayout(publishBaseTemplate);
+      const draft = current ?? cloneLayout(publishBaseTemplateWithOverride);
       return {
         ...draft,
         fields: publishTargetFields.reduce((next, key) => ({
@@ -429,11 +434,11 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
 
   const patchPublishMarker = (key: ResultPositionKey, marker: ResultPositionMarker) => {
     setPublishLayoutDraft((current) => {
-      const draft = current ?? cloneLayout(publishBaseTemplate);
+      const draft = current ?? cloneLayout(publishBaseTemplateWithOverride);
       return {
         ...draft,
         positionMarkers: {
-          ...(draft.positionMarkers ?? clonePositionMarkers(publishBaseTemplate.positionMarkers)),
+          ...(draft.positionMarkers ?? clonePositionMarkers(publishBaseTemplateWithOverride.positionMarkers)),
           [key]: marker,
         },
       };
@@ -441,7 +446,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
   };
 
   const resetPublishLayout = () => {
-    setPublishLayoutDraft(cloneLayout(publishBaseTemplate));
+    setPublishLayoutDraft(cloneLayout(publishBaseTemplateWithOverride));
   };
 
   const templateTargetFields = useMemo(() => {
@@ -560,7 +565,9 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
         body: JSON.stringify({
           programId: selectedProgram.id,
           templateId: templateId === noneValue ? undefined : templateId,
-          layoutOverride: publishLayoutOpen && publishLayoutDraft ? publishLayoutDraft : null,
+          layoutOverride: publishLayoutOpen && publishLayoutDraft
+            ? publishLayoutDraft
+            : existingSelectedResult?.layoutOverride ?? null,
           entries,
         }),
       });
@@ -668,9 +675,6 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
   }, []);
   const templateScopeOptions = scopeTargets(programs, templateDraft.scopeType);
   const adScopeOptions = scopeTargets(programs, adDraft.scopeType);
-  const templatePreviewAd = adDraft.imageUrl
-    ? adDraft
-    : ads.find((ad) => ad.active && ad.imageUrl) ?? null;
   const metricCards = mode === "publish"
     ? [
         {
@@ -1554,7 +1558,6 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                 <ResultPosterPreview
                   template={templateDraft}
                   values={previewValues}
-                  ad={templatePreviewAd}
                   editable
                   dragEnabled={dragEnabled}
                   activeField={activeField}
