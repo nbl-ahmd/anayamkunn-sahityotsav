@@ -15,7 +15,6 @@ import {
   RESULT_CATEGORY_GROUPS,
   PublishedResult,
   ResultsPublicSnapshot,
-  ResultTemplateConfig,
 } from "@/lib/results-types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,20 +22,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
-function templateApplies(template: ResultTemplateConfig, result: PublishedResult) {
-  if (!template.active) return false;
-  if (template.scopeType === "global") return true;
-  if (template.scopeType === "program") return template.scopeValue === result.programId;
-  return template.scopeValue === result.category || template.scopeValue === result.categoryGroup;
-}
-
 const selectClass =
   "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200";
 export function ResultsBrowser({ snapshot }: { snapshot: ResultsPublicSnapshot }) {
   const firstCategory = snapshot.programs[0]?.categoryGroup ?? "General";
   const [category, setCategory] = useState<string>(firstCategory);
   const [programId, setProgramId] = useState<string>(snapshot.programs[0]?.id ?? "");
-  const [templateId, setTemplateId] = useState<string>("");
+  const [variantId, setVariantId] = useState<string>("");
 
   const categoryOptions = RESULT_CATEGORY_GROUPS.filter((item) =>
     snapshot.programs.some((program) => program.categoryGroup === item),
@@ -58,19 +50,33 @@ export function ResultsBrowser({ snapshot }: { snapshot: ResultsPublicSnapshot }
     [selectedProgram?.id, snapshot.results],
   );
 
-  const templates = useMemo(() => {
+  const posterVariants = useMemo(() => {
     if (!result) return [];
-    return snapshot.templates.filter((template) => templateApplies(template, result));
-  }, [result, snapshot.templates]);
-
-  const activeTemplateId = templateId || result?.templateId || templates[0]?.id || "";
-  const posterUrl = result?.posterImageUrl ?? "";
+    if (result.posterVariants?.length) {
+      return result.posterVariants;
+    }
+    return result.posterImageUrl
+      ? [{
+        id: result.templateId,
+        templateId: result.templateId,
+        templateName: "Default Design",
+        imageUrl: result.posterImageUrl,
+        isDefault: true,
+        generatedAt: result.updatedAt,
+      }]
+      : [];
+  }, [result]);
+  const selectedVariant =
+    posterVariants.find((variant) => variant.id === variantId)
+    ?? posterVariants.find((variant) => variant.isDefault)
+    ?? posterVariants[0];
+  const posterUrl = selectedVariant?.imageUrl ?? "";
 
   const onCategoryChange = (next: string) => {
     setCategory(next);
     const nextProgram = snapshot.programs.find((program) => program.categoryGroup === next);
     setProgramId(nextProgram?.id ?? "");
-    setTemplateId("");
+    setVariantId("");
   };
 
   const downloadPoster = async () => {
@@ -164,7 +170,7 @@ export function ResultsBrowser({ snapshot }: { snapshot: ResultsPublicSnapshot }
               value={selectedProgram?.id ?? ""}
               onChange={(event) => {
                 setProgramId(event.target.value);
-                setTemplateId("");
+                setVariantId("");
               }}
               className={selectClass}
             >
@@ -181,12 +187,12 @@ export function ResultsBrowser({ snapshot }: { snapshot: ResultsPublicSnapshot }
               <div className="space-y-2">
                 <Label>Design</Label>
                 <select
-                  value={activeTemplateId}
-                  onChange={(event) => setTemplateId(event.target.value)}
+                  value={selectedVariant?.id ?? ""}
+                  onChange={(event) => setVariantId(event.target.value)}
                   className={selectClass}
-                  disabled
+                  disabled={posterVariants.length < 2}
                 >
-                  {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+                  {posterVariants.map((variant) => <option key={variant.id} value={variant.id}>{variant.templateName}</option>)}
                 </select>
               </div>
 

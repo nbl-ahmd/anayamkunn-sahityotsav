@@ -44,6 +44,10 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
   return shouldUsePostgres() ? postgresStore.publishResult(input) : fileStore.publishResult(input);
 }
 
+export async function clearPublishedResults(): Promise<void> {
+  return shouldUsePostgres() ? postgresStore.clearPublishedResults() : fileStore.clearPublishedResults();
+}
+
 export async function renderPublishedResultPoster(input: {
   resultId: string;
   templateId?: string;

@@ -148,10 +148,20 @@ export interface PublishedResult {
   layoutOverride: ResultLayoutOverride | null;
   adId: string | null;
   posterImageUrl: string;
+  posterVariants: ResultPosterVariant[];
   status: "published";
   publishedAt: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ResultPosterVariant {
+  id: string;
+  templateId: string;
+  templateName: string;
+  imageUrl: string;
+  isDefault: boolean;
+  generatedAt: string;
 }
 
 export interface ResultAdConfig {

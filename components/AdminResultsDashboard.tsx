@@ -575,7 +575,13 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
         const error = await response.json().catch(() => ({}));
         throw new Error(error.error ?? "Publish failed");
       }
-      toast.success("Result published and poster generated.");
+      const data = await response.json() as { result: ResultsAdminSnapshot["results"][number] };
+      const variantCount = data.result.posterVariants?.length ?? 1;
+      toast.success(
+        variantCount > 1
+          ? `Result published with ${variantCount} poster designs.`
+          : "Result published and poster generated.",
+      );
       setEntries(emptyEntries);
       setVisiblePositions({ 2: true, 3: true });
       setPublishLayoutOpen(false);
@@ -583,6 +589,27 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not publish result.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const clearPublishedResults = async () => {
+    if (!results.length) return;
+    const confirmed = window.confirm("Remove all published results and generated poster images? This cannot be undone.");
+    if (!confirmed) return;
+
+    setSaving(true);
+    try {
+      const response = await fetch("/api/admin/results", { method: "DELETE" });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error ?? "Clear failed");
+      }
+      toast.success("Published results and posters removed.");
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not clear published results.");
     } finally {
       setSaving(false);
     }
@@ -1679,8 +1706,17 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
         {mode === "publish" ? <TabsContent value="published" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Published Results</CardTitle>
-              <CardDescription>Generated posters are locked to their result number and assigned ad.</CardDescription>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <CardTitle>Published Results</CardTitle>
+                  <CardDescription>Generated posters are locked to their result number and assigned ad.</CardDescription>
+                </div>
+                {results.length ? (
+                  <Button variant="outline" onClick={clearPublishedResults} disabled={saving}>
+                    Clear All
+                  </Button>
+                ) : null}
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
               {results.length ? results.map((result) => (

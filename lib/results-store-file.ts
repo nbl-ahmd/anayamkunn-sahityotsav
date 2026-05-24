@@ -2,7 +2,11 @@ import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { RESULT_PROGRAMS, getResultProgram } from "@/lib/result-programs";
-import { persistGeneratedResultPoster } from "@/lib/results-assets";
+import {
+  deleteAllLocalGeneratedResultPosters,
+  deleteGeneratedResultPosters,
+  persistGeneratedResultPoster,
+} from "@/lib/results-assets";
 import { buildDefaultResultTemplate, DEFAULT_RESULT_TEMPLATE_ID } from "@/lib/results-defaults";
 import {
   applyLayoutOverride,
@@ -17,6 +21,7 @@ import {
   ResultAdConfig,
   ResultEntry,
   ResultLayoutOverride,
+  ResultPosterVariant,
   ResultsAdminSnapshot,
   ResultsPublicSnapshot,
   ResultStoreData,
@@ -198,6 +203,12 @@ function normalizeResult(input: unknown): PublishedResult | null {
     return null;
   }
   const now = new Date().toISOString();
+  const posterImageUrl = typeof result.posterImageUrl === "string" ? result.posterImageUrl : "";
+  const posterVariants = normalizePosterVariants(result.posterVariants, posterImageUrl, result.templateId);
+  if (!posterImageUrl && !posterVariants.length) {
+    return null;
+  }
+
   return {
     id: typeof result.id === "string" && result.id ? result.id : randomUUID(),
     programId: program.id,
@@ -209,12 +220,58 @@ function normalizeResult(input: unknown): PublishedResult | null {
     templateId: typeof result.templateId === "string" && result.templateId ? result.templateId : DEFAULT_RESULT_TEMPLATE_ID,
     layoutOverride: normalizeStoredLayoutOverride(result.layoutOverride),
     adId: typeof result.adId === "string" && result.adId ? result.adId : null,
-    posterImageUrl: result.posterImageUrl,
+    posterImageUrl: posterImageUrl || posterVariants[0]?.imageUrl || "",
+    posterVariants,
     status: "published",
     publishedAt: validIso(result.publishedAt) ?? now,
     createdAt: validIso(result.createdAt) ?? now,
     updatedAt: validIso(result.updatedAt) ?? now,
   };
+}
+
+function normalizePosterVariants(
+  input: unknown,
+  posterImageUrl: string,
+  templateId: unknown,
+): ResultPosterVariant[] {
+  const list = Array.isArray(input) ? input : [];
+  const variants = list.flatMap((item): ResultPosterVariant[] => {
+    if (!isObject(item) || typeof item.imageUrl !== "string" || !item.imageUrl.trim()) {
+      return [];
+    }
+    const variantTemplateId = typeof item.templateId === "string" && item.templateId
+      ? item.templateId
+      : typeof templateId === "string" && templateId
+        ? templateId
+        : DEFAULT_RESULT_TEMPLATE_ID;
+    return [{
+      id: typeof item.id === "string" && item.id ? item.id : variantTemplateId,
+      templateId: variantTemplateId,
+      templateName: typeof item.templateName === "string" && item.templateName.trim()
+        ? item.templateName.trim()
+        : "Poster Design",
+      imageUrl: item.imageUrl.trim(),
+      isDefault: Boolean(item.isDefault),
+      generatedAt: validIso(item.generatedAt) ?? new Date().toISOString(),
+    }];
+  });
+
+  if (!variants.length && posterImageUrl) {
+    const legacyTemplateId = typeof templateId === "string" && templateId ? templateId : DEFAULT_RESULT_TEMPLATE_ID;
+    return [{
+      id: legacyTemplateId,
+      templateId: legacyTemplateId,
+      templateName: "Default Design",
+      imageUrl: posterImageUrl,
+      isDefault: true,
+      generatedAt: new Date().toISOString(),
+    }];
+  }
+
+  if (variants.some((variant) => variant.isDefault)) {
+    return variants;
+  }
+  return variants.map((variant, index) => ({ ...variant, isDefault: index === 0 }));
 }
 
 function validIso(value: unknown): string | null {
@@ -281,6 +338,25 @@ function resolveTemplate(
     .sort((left, right) => scopePriority(right, program?.id, program?.category, program?.categoryGroup) - scopePriority(left, program?.id, program?.category, program?.categoryGroup));
 
   return scoped[0] ?? templates.find((template) => template.id === DEFAULT_RESULT_TEMPLATE_ID) ?? buildDefaultResultTemplate();
+}
+
+function resolveTemplates(
+  templates: ResultTemplateConfig[],
+  programId: string,
+  preferredTemplateId?: string,
+): ResultTemplateConfig[] {
+  const primary = resolveTemplate(templates, programId, preferredTemplateId);
+  const program = getResultProgram(programId);
+  const matching = templates
+    .filter((template) => templateScopeMatches(template, programId))
+    .sort((left, right) =>
+      scopePriority(right, program?.id, program?.category, program?.categoryGroup)
+      - scopePriority(left, program?.id, program?.category, program?.categoryGroup)
+    );
+
+  return [primary, ...matching].filter((template, index, list) =>
+    list.findIndex((item) => item.id === template.id) === index
+  );
 }
 
 function scopePriority(
@@ -386,7 +462,8 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
     const now = new Date().toISOString();
     const existing = store.results.find((result) => result.programId === program.id);
     const resultNumber = existing?.resultNumber ?? store.nextResultNumber;
-    const template = resolveTemplate(store.templates, program.id, input.templateId);
+    const templates = resolveTemplates(store.templates, program.id, input.templateId);
+    const template = templates[0];
     const ad = existing?.adId
       ? store.ads.find((item) => item.id === existing.adId) ?? null
       : resolveAd(store.ads, resultNumber, program.id);
@@ -407,18 +484,41 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
       ),
       adId: ad?.id ?? null,
       posterImageUrl: existing?.posterImageUrl ?? "",
+      posterVariants: existing?.posterVariants ?? [],
       status: "published",
       publishedAt: existing?.publishedAt ?? now,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };
 
-    const poster = await renderResultPoster(result, applyLayoutOverride(template, result.layoutOverride), ad);
-    result.posterImageUrl = await persistGeneratedResultPoster({
-      resultId: result.id,
-      resultNumber,
-      buffer: poster,
-    });
+    const generatedAt = now;
+    result.posterVariants = await Promise.all(templates.map(async (variantTemplate, index) => {
+      const poster = await renderResultPoster(result, applyLayoutOverride(variantTemplate, result.layoutOverride), ad);
+      return {
+        id: variantTemplate.id,
+        templateId: variantTemplate.id,
+        templateName: variantTemplate.name,
+        imageUrl: await persistGeneratedResultPoster({
+          resultId: result.id,
+          resultNumber,
+          variantId: variantTemplate.id,
+          buffer: poster,
+        }),
+        isDefault: index === 0,
+        generatedAt,
+      };
+    }));
+    result.posterImageUrl = result.posterVariants[0]?.imageUrl ?? "";
+    if (existing) {
+      const nextUrls = new Set([
+        result.posterImageUrl,
+        ...result.posterVariants.map((variant) => variant.imageUrl),
+      ]);
+      await deleteGeneratedResultPosters([
+        existing.posterImageUrl,
+        ...existing.posterVariants.map((variant) => variant.imageUrl),
+      ].filter((url) => url && !nextUrls.has(url)));
+    }
 
     if (!existing) {
       store.nextResultNumber = Math.max(store.nextResultNumber + 1, resultNumber + 1);
@@ -428,6 +528,19 @@ export async function publishResult(input: PublishResultInput): Promise<Publishe
     }
 
     return result;
+  });
+}
+
+export async function clearPublishedResults(): Promise<void> {
+  await withStoreMutation(async (store) => {
+    const posterUrls = store.results.flatMap((result) => [
+      result.posterImageUrl,
+      ...(result.posterVariants ?? []).map((variant) => variant.imageUrl),
+    ]);
+    await deleteGeneratedResultPosters(posterUrls);
+    await deleteAllLocalGeneratedResultPosters();
+    store.results = [];
+    store.nextResultNumber = 1;
   });
 }
 

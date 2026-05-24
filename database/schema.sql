@@ -101,8 +101,10 @@ CREATE TABLE IF NOT EXISTS published_results (
   result_number INTEGER NOT NULL UNIQUE,
   entries JSONB NOT NULL,
   template_id TEXT NOT NULL REFERENCES result_templates(id),
+  layout_override JSONB,
   ad_id TEXT REFERENCES result_ads(id),
   poster_image_url TEXT NOT NULL,
+  poster_variants JSONB,
   status TEXT NOT NULL DEFAULT 'published',
   published_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL,
@@ -111,6 +113,11 @@ CREATE TABLE IF NOT EXISTS published_results (
 
 CREATE INDEX IF NOT EXISTS idx_published_results_number
 ON published_results(result_number DESC);
+
+CREATE TABLE IF NOT EXISTS result_store_migrations (
+  id TEXT PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL
+);
 
 INSERT INTO result_counters (id, next_result_number)
 VALUES (1, 1)
