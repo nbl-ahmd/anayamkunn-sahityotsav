@@ -213,6 +213,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
   const [snapshot, setSnapshot] = useState<ResultsAdminSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState(mode === "templates" ? "templates" : "publish");
   const [category, setCategory] = useState<string>("General");
   const [programId, setProgramId] = useState("");
   const [templateId, setTemplateId] = useState<string>(noneValue);
@@ -245,6 +246,10 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
   const markerUploadRef = useRef<HTMLInputElement>(null);
   const adUploadRef = useRef<HTMLInputElement>(null);
 
+  const [selectedResultIds, setSelectedResultIds] = useState<Set<string>>(new Set());
+  const [rangeStart, setRangeStart] = useState<string>("");
+  const [rangeEnd, setRangeEnd] = useState<string>("");
+
   const load = async () => {
     setLoading(true);
     try {
@@ -275,6 +280,16 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
   const templates = useMemo(() => snapshot?.templates ?? [], [snapshot?.templates]);
   const ads = useMemo(() => snapshot?.ads ?? [], [snapshot?.ads]);
   const results = useMemo(() => snapshot?.results ?? [], [snapshot?.results]);
+  const orderedResults = useMemo(() => {
+    return [...results].sort((left, right) => {
+      const leftTime = new Date(left.publishedAt).getTime();
+      const rightTime = new Date(right.publishedAt).getTime();
+      if (leftTime === rightTime) {
+        return left.resultNumber - right.resultNumber;
+      }
+      return leftTime - rightTime;
+    });
+  }, [results]);
   const remainingPrograms = Math.max(0, programs.length - results.length);
   const activeTemplates = templates.filter((template) => template.active).length;
 
@@ -670,6 +685,95 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
   const posterUrlForResult = (result: ResultsAdminSnapshot["results"][number]) =>
     result.posterImageUrl || `/api/results/${result.id}/poster?templateId=${encodeURIComponent(result.templateId)}&v=${posterRenderVersion}`;
 
+  const toggleResultSelection = (resultId: string) => {
+    setSelectedResultIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(resultId)) {
+        next.delete(resultId);
+      } else {
+        next.add(resultId);
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedResultIds(new Set());
+
+  const selectAllResults = () => {
+    setSelectedResultIds(new Set(orderedResults.map((result) => result.id)));
+  };
+
+  const applyRangeSelection = () => {
+    const start = Number(rangeStart);
+    const end = Number(rangeEnd);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) {
+      toast.error("Enter a valid published order range.");
+      return;
+    }
+    const min = Math.min(start, end);
+    const max = Math.max(start, end);
+    if (min < 1 || max > orderedResults.length) {
+      toast.error(`Range must be between 1 and ${orderedResults.length}.`);
+      return;
+    }
+    const ids = orderedResults.slice(min - 1, max).map((result) => result.id);
+    setSelectedResultIds(new Set(ids));
+  };
+
+  const downloadSelectedPosters = async () => {
+    if (!selectedResultIds.size) {
+      toast.error("Select at least one result to download.");
+      return;
+    }
+
+    const targets = orderedResults.filter((result) => selectedResultIds.has(result.id));
+    for (const result of targets) {
+      await downloadPoster(posterUrlForResult(result), `result-${result.resultNumber}`);
+    }
+    toast.success(`Downloaded ${targets.length} poster${targets.length === 1 ? "" : "s"}.`);
+  };
+
+  const editPublishedResult = (result: ResultsAdminSnapshot["results"][number]) => {
+    setCategory(result.categoryGroup);
+    setProgramId(result.programId);
+    setTemplateId(result.templateId);
+    setEntries(result.entries);
+    const secondEntry = result.entries.find((entry) => entry.position === 2);
+    const thirdEntry = result.entries.find((entry) => entry.position === 3);
+    setVisiblePositions({
+      2: Boolean(secondEntry?.name?.trim()),
+      3: Boolean(thirdEntry?.name?.trim()),
+    });
+    setPublishLayoutOpen(false);
+    setPublishLayoutDraft(null);
+    setActiveTab("publish");
+    toast.success("Loaded published result for editing.");
+  };
+
+  const deletePublishedResult = async (result: ResultsAdminSnapshot["results"][number]) => {
+    const confirmed = window.confirm(`Delete Result ${String(result.resultNumber).padStart(2, "0")} and its posters? This cannot be undone.`);
+    if (!confirmed) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/admin/results?id=${result.id}`, { method: "DELETE" });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error ?? "Delete failed");
+      }
+      toast.success("Result deleted.");
+      await load();
+      setSelectedResultIds((prev) => {
+        const next = new Set(prev);
+        next.delete(result.id);
+        return next;
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete result.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const templateLayoutReferenceKey = templateLayoutTarget === "winnerNames"
     ? "firstName"
     : templateLayoutTarget === "winnerUnits"
@@ -813,7 +917,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
         ))}
       </section>
 
-      <Tabs defaultValue={mode === "templates" ? "templates" : "publish"} className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="h-auto flex-wrap rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
           {mode === "publish" ? <TabsTrigger value="publish"><Trophy className="h-4 w-4" /> Publish</TabsTrigger> : null}
           {mode === "templates" ? <TabsTrigger value="templates"><FileImage className="h-4 w-4" /> Poster Templates</TabsTrigger> : null}
@@ -1711,22 +1815,78 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                   <CardTitle>Published Results</CardTitle>
                   <CardDescription>Generated posters are locked to their result number and assigned ad.</CardDescription>
                 </div>
-                {results.length ? (
-                  <Button variant="outline" onClick={clearPublishedResults} disabled={saving}>
-                    Clear All
+                <div className="flex flex-wrap items-center gap-2">
+                  {orderedResults.length ? (
+                    <Button variant="outline" onClick={clearPublishedResults} disabled={saving}>
+                      Clear All
+                    </Button>
+                  ) : null}
+                  <Button onClick={downloadSelectedPosters} disabled={!selectedResultIds.size}>
+                    Download Selected
                   </Button>
-                ) : null}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {results.length ? results.map((result) => (
+              {orderedResults.length ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
+                    <div className="space-y-2">
+                      <Label>Published order range</Label>
+                      <div className="flex flex-wrap gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          placeholder="From order #"
+                          value={rangeStart}
+                          onChange={(event) => setRangeStart(event.target.value)}
+                          className="w-[120px]"
+                        />
+                        <Input
+                          type="number"
+                          min={1}
+                          placeholder="To order #"
+                          value={rangeEnd}
+                          onChange={(event) => setRangeEnd(event.target.value)}
+                          className="w-[120px]"
+                        />
+                        <Button variant="outline" onClick={applyRangeSelection}>
+                          Select Range
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" onClick={selectAllResults}>Select All</Button>
+                      <Button variant="ghost" onClick={clearSelection}>Clear</Button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              {orderedResults.length ? orderedResults.map((result, index) => (
                 <div key={result.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
-                    <p className="font-semibold text-slate-900">Result {String(result.resultNumber).padStart(2, "0")} - {result.competitionName}</p>
-                    <p className="text-sm text-slate-500">{result.category} · {new Date(result.publishedAt).toLocaleString()}</p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedResultIds.has(result.id)}
+                        onChange={() => toggleResultSelection(result.id)}
+                        className="h-4 w-4 rounded border-slate-300 text-slate-900"
+                      />
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-slate-900">Result {String(result.resultNumber).padStart(2, "0")} - {result.competitionName}</p>
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                            Order #{index + 1}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-500">{result.category} · {new Date(result.publishedAt).toLocaleString()}</p>
+                      </div>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" onClick={() => window.open(posterUrlForResult(result), "_blank", "noopener,noreferrer")}>Open</Button>
+                    <Button variant="outline" onClick={() => editPublishedResult(result)}>Edit</Button>
+                    <Button variant="outline" onClick={() => deletePublishedResult(result)} disabled={saving}>Delete</Button>
                     <Button onClick={() => downloadPoster(posterUrlForResult(result), `result-${result.resultNumber}`)}>Download</Button>
                   </div>
                 </div>

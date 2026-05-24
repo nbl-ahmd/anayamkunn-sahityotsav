@@ -48,6 +48,12 @@ export async function clearPublishedResults(): Promise<void> {
   return shouldUsePostgres() ? postgresStore.clearPublishedResults() : fileStore.clearPublishedResults();
 }
 
+export async function deletePublishedResult(resultId: string): Promise<void> {
+  return shouldUsePostgres()
+    ? postgresStore.deletePublishedResult(resultId)
+    : fileStore.deletePublishedResult(resultId);
+}
+
 export async function renderPublishedResultPoster(input: {
   resultId: string;
   templateId?: string;

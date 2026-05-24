@@ -848,6 +848,34 @@ export async function clearPublishedResults(): Promise<void> {
   `;
 }
 
+export async function deletePublishedResult(resultId: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+
+  const rows = (await sql`
+    SELECT poster_image_url, poster_variants
+    FROM published_results
+    WHERE id = ${resultId}
+    LIMIT 1
+  `) as Array<{ poster_image_url: string; poster_variants: unknown }>;
+
+  if (!rows[0]) {
+    throw new Error("Result not found");
+  }
+
+  const posterVariants = Array.isArray(rows[0].poster_variants)
+    ? rows[0].poster_variants as Array<{ imageUrl?: string }>
+    : [];
+  const urls = [rows[0].poster_image_url, ...posterVariants.map((variant) => variant.imageUrl ?? "")].filter(Boolean);
+
+  await sql`
+    DELETE FROM published_results
+    WHERE id = ${resultId}
+  `;
+
+  await deleteGeneratedResultPosters(urls);
+}
+
 export async function renderPublishedResultPoster(input: {
   resultId: string;
   templateId?: string;

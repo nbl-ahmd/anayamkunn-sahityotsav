@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_SESSION_COOKIE_NAME, isValidAdminSessionToken } from "@/lib/admin-auth";
 import { UNIT_LIST } from "@/lib/constants";
 import { RESULT_FONT_VALUES } from "@/lib/results-fonts";
-import { clearPublishedResults, getAdminResultsSnapshot, publishResult } from "@/lib/results-store";
+import { clearPublishedResults, deletePublishedResult, getAdminResultsSnapshot, publishResult } from "@/lib/results-store";
 import {
   normalizeLayoutOverride as normalizeResultLayoutOverride,
   normalizePositionMarkers,
@@ -151,6 +151,11 @@ export async function DELETE(req: NextRequest) {
   try {
     if (!isAuthorized(req)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const id = req.nextUrl.searchParams.get("id");
+    if (id) {
+      await deletePublishedResult(id);
+      return NextResponse.json({ ok: true });
     }
 
     await clearPublishedResults();

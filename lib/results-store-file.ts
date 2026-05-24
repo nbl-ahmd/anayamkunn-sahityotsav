@@ -544,6 +544,22 @@ export async function clearPublishedResults(): Promise<void> {
   });
 }
 
+export async function deletePublishedResult(resultId: string): Promise<void> {
+  await withStoreMutation(async (store) => {
+    const existing = store.results.find((result) => result.id === resultId);
+    if (!existing) {
+      throw new Error("Result not found");
+    }
+
+    const posterUrls = [
+      existing.posterImageUrl,
+      ...(existing.posterVariants ?? []).map((variant) => variant.imageUrl),
+    ];
+    await deleteGeneratedResultPosters(posterUrls);
+    store.results = store.results.filter((result) => result.id !== resultId);
+  });
+}
+
 export async function renderPublishedResultPoster(input: {
   resultId: string;
   templateId?: string;
