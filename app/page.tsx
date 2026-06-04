@@ -1,20 +1,15 @@
 import Link from "next/link";
-import { ArrowRight, CalendarDays, FileImage, Trophy } from "lucide-react";
+import { ArrowRight, CalendarDays, FileImage, Medal, Trophy } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { HomeCountdown } from "@/components/HomeCountdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getAppSettings } from "@/lib/store";
 import { getPublicResultsSnapshot } from "@/lib/results-store";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [appSettings, resultsSnapshot] = await Promise.all([
-    getAppSettings(),
-    getPublicResultsSnapshot(),
-  ]);
+  const resultsSnapshot = await getPublicResultsSnapshot();
   const latestResult = resultsSnapshot.results[0];
   const publishedCount = resultsSnapshot.results.length;
   const totalPrograms = resultsSnapshot.programs.length;
@@ -40,14 +35,55 @@ export default async function HomePage() {
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
-              <Button asChild variant="outline" className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white">
-                <Link href="/admin">Admin</Link>
-              </Button>
             </div>
           </div>
 
           <div className="border-t border-white/10 bg-white/[0.04] p-6 lg:border-l lg:border-t-0">
-            <HomeCountdown targetDate={appSettings.sahithyolsavDate} />
+            <div className="flex h-full min-h-[260px] flex-col justify-between rounded-lg border border-white/10 bg-white/[0.03] p-5">
+              <div>
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-white">
+                  <Medal className="h-3.5 w-3.5" />
+                  Latest Published Result
+                </div>
+                {latestResult ? (
+                  <>
+                    <p className="text-sm font-bold uppercase tracking-[0.14em] text-slate-400">
+                      Result {String(latestResult.resultNumber).padStart(2, "0")}
+                    </p>
+                    <h2 className="mt-3 text-3xl font-black tracking-tight text-white">
+                      {latestResult.competitionName}
+                    </h2>
+                    <p className="mt-2 text-sm font-semibold text-slate-300">{latestResult.category}</p>
+                    <div className="mt-5 space-y-2">
+                      {latestResult.entries.slice(0, 3).map((entry) => (
+                        <div key={`${entry.position}-${entry.name}-${entry.unit}`} className="flex items-center gap-3 rounded-lg bg-white/10 px-3 py-2">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-xs font-black text-slate-950">
+                            {entry.position}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold text-white">{entry.name || "Name pending"}</p>
+                            <p className="truncate text-xs text-slate-400">{entry.unit}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="text-3xl font-black tracking-tight text-white">Results pending</h2>
+                    <p className="mt-3 text-sm leading-6 text-slate-300">
+                      The latest published result will appear here once the admin team publishes the first poster.
+                    </p>
+                  </>
+                )}
+              </div>
+              <Button asChild variant="outline" className="mt-6 border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white">
+                <Link href="/results">
+                  Open Results
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
       </section>
