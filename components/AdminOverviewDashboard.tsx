@@ -1,16 +1,6 @@
 import Link from "next/link";
-import {
-  Activity,
-  ArrowRight,
-  Image as ImageIcon,
-  LayoutTemplate,
-  Medal,
-  Settings,
-  SlidersHorizontal,
-  Trophy,
-  Users,
-} from "lucide-react";
-import { getAppSettings, getLeaderboard, getTemplate } from "@/lib/store";
+import { Activity, ArrowRight, CalendarDays, FileImage, LayoutTemplate, Settings, Trophy } from "lucide-react";
+import { getAppSettings } from "@/lib/store";
 import { getAdminResultsSnapshot } from "@/lib/results-store";
 import { AdminMetricCard } from "@/components/admin/AdminMetricCard";
 import { AdminPanel } from "@/components/admin/AdminPanel";
@@ -31,50 +21,32 @@ function formatDate(value: string | null): string {
   }).format(date);
 }
 
-function percent(value: number, total: number): string {
-  if (!total) {
-    return "0%";
-  }
-  return `${Math.round((value / total) * 100)}%`;
-}
-
 export async function AdminOverviewDashboard() {
-  const [leaderboard, template, settings, resultsSnapshot] = await Promise.all([
-    getLeaderboard(),
-    getTemplate(),
+  const [settings, resultsSnapshot] = await Promise.all([
     getAppSettings(),
     getAdminResultsSnapshot(),
   ]);
 
   const publishedResults = resultsSnapshot.results.length;
   const totalPrograms = resultsSnapshot.programs.length;
-  const latestResult = resultsSnapshot.results[0];
-  const topUnits = leaderboard.unitTotals.slice(0, 5);
+  const latestResults = resultsSnapshot.results.slice(0, 5);
 
   const workflows = [
     {
       href: "/admin/results",
       title: "Publish Results",
-      description: "Enter winners, generate exact poster images, and assign sponsor ads.",
+      description: "Enter winners, generate poster images, and assign sponsor ads.",
       icon: Trophy,
       stat: `${publishedResults}/${totalPrograms}`,
       tone: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     },
     {
       href: "/admin/templates",
-      title: "Templates",
-      description: "Manage family frames, result poster designs, and sponsor ad rules.",
+      title: "Result Templates",
+      description: "Manage result poster designs, text placement, and sponsor ad rules.",
       icon: LayoutTemplate,
-      stat: `${template.frames.length} frames`,
+      stat: `${resultsSnapshot.templates.length} designs`,
       tone: "bg-sky-50 text-sky-700 ring-sky-200",
-    },
-    {
-      href: "/admin/counts",
-      title: "Manual Counts",
-      description: "Reconcile offline/missed frame counts without editing generated records.",
-      icon: SlidersHorizontal,
-      stat: `${leaderboard.manualUnitTotals.reduce((sum, item) => sum + item.count, 0)} manual`,
-      tone: "bg-amber-50 text-amber-700 ring-amber-200",
     },
     {
       href: "/admin/settings",
@@ -92,13 +64,13 @@ export async function AdminOverviewDashboard() {
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="p-6 sm:p-8">
             <Badge className="mb-5 bg-white/10 text-white ring-1 ring-white/15 hover:bg-white/10">
-              Live Operations
+              Anayamkunnu Sector
             </Badge>
             <h2 className="max-w-3xl text-3xl font-black tracking-tight sm:text-4xl">
-              One console for publishing, templates, counters, and event readiness.
+              One console for publishing official results and posters.
             </h2>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
-              Monitor the family frame campaign, publish official result posters, and keep public-facing assets consistent across devices.
+              Publish competition results, manage poster templates, and keep public-facing result assets ready during the event.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Button asChild className="bg-white text-slate-950 hover:bg-slate-100">
@@ -116,15 +88,8 @@ export async function AdminOverviewDashboard() {
           <div className="border-t border-white/10 bg-white/[0.04] p-6 lg:border-l lg:border-t-0">
             <div className="space-y-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Latest Result</p>
-                {latestResult ? (
-                  <>
-                    <p className="mt-2 text-lg font-black">{latestResult.competitionName}</p>
-                    <p className="text-sm text-slate-400">Result {String(latestResult.resultNumber).padStart(2, "0")}</p>
-                  </>
-                ) : (
-                  <p className="mt-2 text-lg font-black text-slate-300">No result published</p>
-                )}
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Published</p>
+                <p className="mt-2 text-lg font-black">{publishedResults} results</p>
               </div>
               <div className="h-px bg-white/10" />
               <div>
@@ -140,29 +105,29 @@ export async function AdminOverviewDashboard() {
         <AdminMetricCard
           label="Published Results"
           value={publishedResults}
-          detail={`${totalPrograms - publishedResults} competitions remaining`}
+          detail={`${Math.max(totalPrograms - publishedResults, 0)} competitions remaining`}
           icon={Trophy}
           tone="emerald"
         />
         <AdminMetricCard
-          label="Photos Framed"
-          value={leaderboard.total}
-          detail={`${leaderboard.liveUnitTotals.reduce((sum, item) => sum + item.count, 0)} live records`}
-          icon={ImageIcon}
+          label="Competitions"
+          value={totalPrograms}
+          detail="Configured result programs"
+          icon={Activity}
           tone="sky"
-        />
-        <AdminMetricCard
-          label="Active Units"
-          value={leaderboard.unitTotals.filter((item) => item.count > 0).length}
-          detail={`${leaderboard.unitTotals.length} total units`}
-          icon={Users}
-          tone="amber"
         />
         <AdminMetricCard
           label="Templates"
           value={resultsSnapshot.templates.length}
-          detail={`${resultsSnapshot.ads.length} sponsor ad rules`}
+          detail="Poster designs"
           icon={LayoutTemplate}
+          tone="amber"
+        />
+        <AdminMetricCard
+          label="Sponsor Ads"
+          value={resultsSnapshot.ads.length}
+          detail="Ad assignment rules"
+          icon={FileImage}
           tone="violet"
         />
       </section>
@@ -198,30 +163,26 @@ export async function AdminOverviewDashboard() {
         </AdminPanel>
 
         <AdminPanel
-          title="Unit Standings"
-          description="Current family frame count distribution."
-          icon={Medal}
+          title="Recent Results"
+          description="Latest posters published from the results workflow."
+          icon={CalendarDays}
         >
           <div className="space-y-3">
-            {topUnits.map((unit, index) => (
-              <div key={unit.unit} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            {latestResults.length ? latestResults.map((result) => (
+              <div key={result.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-black text-slate-950">
-                      {index + 1}. {unit.unit}
-                    </p>
-                    <p className="text-xs text-slate-500">{percent(unit.count, leaderboard.total)} of total</p>
+                    <p className="truncate text-sm font-black text-slate-950">{result.competitionName}</p>
+                    <p className="text-xs text-slate-500">{result.category}</p>
                   </div>
-                  <span className="text-lg font-black text-slate-950">{unit.count}</span>
-                </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
-                  <div
-                    className="h-full rounded-full bg-slate-950"
-                    style={{ width: percent(unit.count, leaderboard.total) }}
-                  />
+                  <Badge variant="outline">#{String(result.resultNumber).padStart(2, "0")}</Badge>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm font-semibold text-slate-500">
+                No results published yet.
+              </div>
+            )}
           </div>
         </AdminPanel>
       </div>

@@ -265,7 +265,7 @@ export function HeroSection({ targetDate }: HeroSectionProps) {
 
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white tracking-tight mb-4 leading-tight">
             <span className="block text-lg md:text-xl lg:text-2xl font-semibold tracking-normal text-slate-200">
-              Karassery Sector
+              Anayamkunnu Sector
             </span>
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-orange-500">
               Sahityolsav

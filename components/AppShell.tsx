@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode, useState } from "react";
-import { LayoutDashboard, Users, Trophy, Menu, X, Sparkles } from "lucide-react";
+import { LayoutDashboard, Menu, X, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 
@@ -17,8 +17,6 @@ interface AppShellProps {
 
 const navItems = [
   { href: "/", label: "Home", icon: LayoutDashboard },
-  { href: "/family", label: "Family Layouts", icon: Users },
-  { href: "/sector", label: "Live Stats", icon: Trophy },
   { href: "/results", label: "Results", icon: Sparkles },
 ];
 
@@ -36,7 +34,7 @@ export function AppShell({ title, subtitle, showProfile = false, children }: App
           <div className="flex flex-1 items-center justify-between md:justify-start">
             <Link href="/" className="flex items-center gap-2 flex-shrink-0">
               <span className="text-[11px] font-semibold tracking-[0.04em] text-slate-500 sm:text-[13px] uppercase">
-                Karassery
+                Anayamkunnu Sector
               </span>
               <Image
                 src="/Sahithyolsav (en) (2).png"

@@ -1,71 +1,117 @@
-import { hasDatabaseUrl } from "@/lib/db";
-import * as fileStore from "@/lib/store-file";
-import * as postgresStore from "@/lib/store-postgres";
-import {
-  AppSettings,
-  FramedRecord,
-  LeaderboardSnapshot,
-  ManualUnitCountMap,
-  TemplateConfig,
-  UnitName,
-} from "@/lib/types";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { DEFAULT_UNIT_LIST } from "@/lib/constants";
+import { getSql, hasDatabaseUrl } from "@/lib/db";
+import { AppSettings } from "@/lib/types";
 
-function shouldUsePostgres(): boolean {
-  return hasDatabaseUrl();
+const DATA_DIR = path.join(process.cwd(), "data");
+const SETTINGS_FILE = path.join(DATA_DIR, "app-settings.json");
+
+function defaultAppSettings(): AppSettings {
+  return {
+    sahithyolsavDate: null,
+    unitNames: [...DEFAULT_UNIT_LIST],
+  };
 }
 
-export async function getTemplate(templateId?: string): Promise<TemplateConfig> {
-  return shouldUsePostgres() ? postgresStore.getTemplate(templateId) : fileStore.getTemplate(templateId);
+function normalizeUnitNames(input: unknown): string[] {
+  if (!Array.isArray(input)) {
+    return [...DEFAULT_UNIT_LIST];
+  }
+
+  const seen = new Set<string>();
+  const units = input
+    .map((value) => (typeof value === "string" ? value.trim().replace(/\s+/g, " ") : ""))
+    .filter((value) => {
+      if (!value || seen.has(value.toLowerCase())) {
+        return false;
+      }
+      seen.add(value.toLowerCase());
+      return true;
+    })
+    .slice(0, 100);
+
+  return units.length ? units : [...DEFAULT_UNIT_LIST];
 }
 
-export async function saveTemplate(nextTemplate: TemplateConfig): Promise<TemplateConfig> {
-  return shouldUsePostgres() ? postgresStore.saveTemplate(nextTemplate) : fileStore.saveTemplate(nextTemplate);
+function normalizeAppSettings(input: unknown): AppSettings {
+  if (!input || typeof input !== "object") {
+    return defaultAppSettings();
+  }
+  const settings = input as Partial<AppSettings>;
+  if (!settings.sahithyolsavDate) {
+    return {
+      sahithyolsavDate: null,
+      unitNames: normalizeUnitNames(settings.unitNames),
+    };
+  }
+  const parsed = new Date(settings.sahithyolsavDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return {
+      sahithyolsavDate: null,
+      unitNames: normalizeUnitNames(settings.unitNames),
+    };
+  }
+  return {
+    sahithyolsavDate: parsed.toISOString(),
+    unitNames: normalizeUnitNames(settings.unitNames),
+  };
 }
 
-export async function recordFraming(input: {
-  templateId: string;
-  unit: UnitName;
-  frameId: string;
-  familyName?: string;
-}): Promise<FramedRecord> {
-  return shouldUsePostgres() ? postgresStore.recordFraming(input) : fileStore.recordFraming(input);
+async function ensureSettingsTable() {
+  const sql = getSql();
+  await sql`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      id SMALLINT PRIMARY KEY,
+      settings JSONB NOT NULL
+    )
+  `;
+  await sql`
+    INSERT INTO app_settings (id, settings)
+    VALUES (1, ${JSON.stringify(defaultAppSettings())}::jsonb)
+    ON CONFLICT (id) DO NOTHING
+  `;
 }
 
-export async function getLeaderboard(templateId?: string): Promise<LeaderboardSnapshot> {
-  return shouldUsePostgres() ? postgresStore.getLeaderboard(templateId) : fileStore.getLeaderboard(templateId);
+async function getPostgresAppSettings(): Promise<AppSettings> {
+  await ensureSettingsTable();
+  const sql = getSql();
+  const rows = await sql`SELECT settings FROM app_settings WHERE id = 1` as Array<{ settings: unknown }>;
+  return normalizeAppSettings(rows[0]?.settings);
 }
 
-export async function getTodayLeadingUnit(templateId?: string): Promise<{unit: string, count: number} | null> {
-  return shouldUsePostgres() ? postgresStore.getTodayLeadingUnit(templateId) : fileStore.getTodayLeadingUnit(templateId);
+async function setPostgresAppSettings(input: AppSettings): Promise<AppSettings> {
+  await ensureSettingsTable();
+  const sql = getSql();
+  const normalized = normalizeAppSettings(input);
+  await sql`
+    INSERT INTO app_settings (id, settings)
+    VALUES (1, ${JSON.stringify(normalized)}::jsonb)
+    ON CONFLICT (id) DO UPDATE SET settings = EXCLUDED.settings
+  `;
+  return normalized;
 }
 
-export async function getCurrentGlobalCounter(): Promise<number> {
-  return shouldUsePostgres()
-    ? postgresStore.getCurrentGlobalCounter()
-    : fileStore.getCurrentGlobalCounter();
+async function getFileAppSettings(): Promise<AppSettings> {
+  try {
+    const raw = await readFile(SETTINGS_FILE, "utf8");
+    return normalizeAppSettings(JSON.parse(raw));
+  } catch {
+    return defaultAppSettings();
+  }
 }
 
-export async function getManualUnitCounts(
-  templateId?: string,
-): Promise<ManualUnitCountMap> {
-  return shouldUsePostgres()
-    ? postgresStore.getManualUnitCounts(templateId)
-    : fileStore.getManualUnitCounts(templateId);
-}
-
-export async function setManualUnitCounts(input: {
-  templateId: string;
-  counts: ManualUnitCountMap;
-}): Promise<ManualUnitCountMap> {
-  return shouldUsePostgres()
-    ? postgresStore.setManualUnitCounts(input)
-    : fileStore.setManualUnitCounts(input);
+async function setFileAppSettings(input: AppSettings): Promise<AppSettings> {
+  const normalized = normalizeAppSettings(input);
+  await mkdir(DATA_DIR, { recursive: true });
+  await writeFile(SETTINGS_FILE, JSON.stringify(normalized, null, 2));
+  return normalized;
 }
 
 export async function getAppSettings(): Promise<AppSettings> {
-  return shouldUsePostgres() ? postgresStore.getAppSettings() : fileStore.getAppSettings();
+  return hasDatabaseUrl() ? getPostgresAppSettings() : getFileAppSettings();
 }
 
 export async function setAppSettings(input: AppSettings): Promise<AppSettings> {
-  return shouldUsePostgres() ? postgresStore.setAppSettings(input) : fileStore.setAppSettings(input);
+  return hasDatabaseUrl() ? setPostgresAppSettings(input) : setFileAppSettings(input);
 }

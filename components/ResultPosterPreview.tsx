@@ -363,6 +363,7 @@ export function ResultPosterPreview({
                         ? "flex-end"
                         : "center",
                   textTransform: layout.textTransform === "uppercase" ? "uppercase" : "none",
+                  whiteSpace: "pre-line",
                 }}
               >
                 <span className="line-clamp-2 w-full break-words">{text}</span>

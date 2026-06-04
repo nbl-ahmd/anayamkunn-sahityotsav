@@ -223,8 +223,9 @@ export function cloneLayoutOverride(input: ResultLayoutOverride): ResultLayoutOv
 }
 
 export function getVisiblePlacements(entries: ResultEntry[]): ResultPositionKey[] {
-  const byPosition = new Map(entries.map((entry) => [entry.position, entry]));
-  return RESULT_POSITION_KEYS.filter((key) => Boolean(byPosition.get(positionEntryNumbers[key])?.name.trim()));
+  return RESULT_POSITION_KEYS.filter((key) =>
+    entries.some((entry) => entry.position === positionEntryNumbers[key] && entry.name.trim()),
+  );
 }
 
 export function getVisiblePlacementsFromValues(values: Record<ResultFieldKey, string>): ResultPositionKey[] {

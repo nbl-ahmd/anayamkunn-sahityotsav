@@ -15,7 +15,7 @@ export default async function AdminTemplatesPage() {
   return (
     <AdminShell
       title="Templates"
-      subtitle="Choose between family frame templates and result poster templates."
+      subtitle="Manage official result poster templates and sponsor ad rules."
     >
       <AdminTemplatesHub />
     </AdminShell>

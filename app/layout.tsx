@@ -5,9 +5,9 @@ import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
-const siteTitle = "Karassery sector sahityolsav";
+const siteTitle = "Anayamkunnu Sector Sahityotsav";
 const siteDescription =
-  "Official Karassery Sector Sahityolsav app for live standings, family framing, and updates.";
+  "Official Anayamkunnu Sector Sahityotsav app for results, posters, and event updates.";
 const logoPath = "/SAHITYOTSAV LOGO.png";
 
 
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
         url: logoPath,
         width: 1200,
         height: 1200,
-        alt: "Karassery Sector Sahityolsav logo",
+        alt: "Anayamkunnu Sector Sahityotsav logo",
       },
     ],
   },

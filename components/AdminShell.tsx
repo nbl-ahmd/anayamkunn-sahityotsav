@@ -7,7 +7,6 @@ import { ReactNode, useEffect, useState } from "react";
 import {
   BarChart3,
   Home,
-  SlidersHorizontal,
   CalendarDays,
   Trophy,
   LayoutTemplate,
@@ -33,7 +32,6 @@ const navItems = [
   { href: "/admin", label: "Overview", icon: BarChart3, exact: true },
   { href: "/admin/templates", label: "Templates", icon: LayoutTemplate },
   { href: "/admin/results", label: "Results", icon: Trophy },
-  { href: "/admin/counts", label: "Manual Counts", icon: SlidersHorizontal },
   { href: "/admin/settings", label: "Settings", icon: CalendarDays },
 ];
 
@@ -228,7 +226,7 @@ export function AdminShell({ title, subtitle, children }: AdminShellProps) {
             <div className="mb-6 hidden lg:block">
               <div className="flex items-end justify-between gap-6">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Karassery Sahityolsav</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Anayamkunnu Sector</p>
                   <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">{title}</h1>
                 </div>
                 <Button asChild variant="outline" className="bg-white">

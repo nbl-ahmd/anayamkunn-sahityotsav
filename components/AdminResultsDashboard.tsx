@@ -15,7 +15,7 @@ import {
   Send,
   Trophy,
 } from "lucide-react";
-import { UNIT_LIST } from "@/lib/constants";
+import { DEFAULT_UNIT_LIST } from "@/lib/constants";
 import { downloadBlob } from "@/lib/client-utils";
 import { buildDefaultResultTemplate, clonePositionMarkers } from "@/lib/results-defaults";
 import { RESULT_FONT_OPTIONS } from "@/lib/results-fonts";
@@ -52,14 +52,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const noneValue = "__none__";
 const posterRenderVersion = "path-marker-v4";
 
-const emptyEntries: ResultEntry[] = [1, 2, 3].map((position) => ({
+const buildEmptyEntries = (units: readonly string[]): ResultEntry[] => [1, 2, 3].map((position) => ({
   position: position as 1 | 2 | 3,
   name: "",
-  unit: UNIT_LIST[0],
+  unit: units[0] ?? DEFAULT_UNIT_LIST[0],
   chestNumber: "",
   codeLetter: "",
   points: "",
-}));
+})).flatMap((entry) => entry.position === 2 ? [entry, { ...entry }] : [entry]);
+
+const fallbackEntries = buildEmptyEntries(DEFAULT_UNIT_LIST);
 
 const fieldLabels: Record<ResultFieldKey, string> = {
   resultNumber: "Result Number",
@@ -93,7 +95,7 @@ const previewValuesBase: Record<ResultFieldKey, string> = {
   competitionName: "Language Game English",
   firstPosition: "1",
   firstName: "Muhammed Fayaz TA",
-  firstUnit: "Karassery",
+  firstUnit: "Anayamkunnu",
   secondPosition: "2",
   secondName: "Abdul Badusha KC",
   secondUnit: "Sarkkarparamb",
@@ -217,8 +219,10 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
   const [category, setCategory] = useState<string>("General");
   const [programId, setProgramId] = useState("");
   const [templateId, setTemplateId] = useState<string>(noneValue);
-  const [entries, setEntries] = useState<ResultEntry[]>(emptyEntries);
+  const [unitNames, setUnitNames] = useState<string[]>([...DEFAULT_UNIT_LIST]);
+  const [entries, setEntries] = useState<ResultEntry[]>(fallbackEntries);
   const [visiblePositions, setVisiblePositions] = useState<Record<2 | 3, boolean>>({ 2: true, 3: true });
+  const [secondTieVisible, setSecondTieVisible] = useState(false);
   const [publishLayoutOpen, setPublishLayoutOpen] = useState(false);
   const [publishLayoutDraft, setPublishLayoutDraft] = useState<ResultLayoutOverride | null>(null);
   const [publishActiveField, setPublishActiveField] = useState<ResultFieldKey>("firstName");
@@ -263,6 +267,18 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
       }
       if (data.templates[0] && !templateDraft.id) {
         setTemplateDraft({ ...data.templates[0], resultNumberFormat: "number" });
+      }
+      const settingsResponse = await fetch("/api/admin/settings", { cache: "no-store" });
+      if (settingsResponse.ok) {
+        const settingsData = await settingsResponse.json() as { settings?: { unitNames?: string[] } };
+        const nextUnits = settingsData.settings?.unitNames?.length ? settingsData.settings.unitNames : [...DEFAULT_UNIT_LIST];
+        setUnitNames(nextUnits);
+        setEntries((current) =>
+          current.map((entry) => ({
+            ...entry,
+            unit: nextUnits.includes(entry.unit) ? entry.unit : nextUnits[0],
+          })),
+        );
       }
     } catch {
       toast.error("Could not load result dashboard.");
@@ -353,10 +369,12 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
 
   const publishPreviewValues = useMemo<Record<ResultFieldKey, string>>(() => {
     const padded = String(publishPreviewResultNumber).padStart(2, "0");
-    const byPosition = new Map(entries.map((entry) => [entry.position, entry]));
-    const first = byPosition.get(1);
-    const second = byPosition.get(2);
-    const third = byPosition.get(3);
+    const first = entries.find((entry) => entry.position === 1);
+    const secondEntries = entries.filter((entry) => entry.position === 2);
+    const secondValues = secondEntries
+      .filter((entry, index) => index === 0 || secondTieVisible)
+      .filter((entry) => entry.name.trim());
+    const third = entries.find((entry) => entry.position === 3);
     const hasSecond = visiblePositions[2];
     const hasThird = visiblePositions[3];
 
@@ -366,22 +384,29 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
       competitionName: selectedProgram?.publicCompetitionName ?? "Competition",
       firstPosition: "1",
       firstName: first?.name.trim() || "First winner name",
-      firstUnit: first?.unit ?? UNIT_LIST[0],
+      firstUnit: first?.unit ?? unitNames[0] ?? "",
       secondPosition: hasSecond ? "2" : "",
-      secondName: hasSecond ? second?.name.trim() || "Second winner name" : "",
-      secondUnit: hasSecond ? second?.unit ?? UNIT_LIST[1] : "",
+      secondName: hasSecond
+        ? secondValues.map((entry) => entry.name.trim()).join("\n") || "Second winner name"
+        : "",
+      secondUnit: hasSecond
+        ? secondValues.map((entry) => entry.unit).join("\n") || (unitNames[1] ?? "")
+        : "",
       thirdPosition: hasThird ? "3" : "",
       thirdName: hasThird ? third?.name.trim() || "Third winner name" : "",
-      thirdUnit: hasThird ? third?.unit ?? UNIT_LIST[2] : "",
+      thirdUnit: hasThird ? third?.unit ?? unitNames[2] ?? "" : "",
     };
-  }, [category, entries, publishPreviewResultNumber, selectedProgram, visiblePositions]);
+  }, [category, entries, publishPreviewResultNumber, secondTieVisible, selectedProgram, unitNames, visiblePositions]);
 
-  const patchEntry = (position: 1 | 2 | 3, patch: Partial<ResultEntry>) => {
-    setEntries((prev) => prev.map((entry) => (entry.position === position ? { ...entry, ...patch } : entry)));
+  const patchEntryAt = (index: number, patch: Partial<ResultEntry>) => {
+    setEntries((prev) => prev.map((entry, entryIndex) => (entryIndex === index ? { ...entry, ...patch } : entry)));
   };
 
   const clearEntry = (position: 2 | 3) => {
     setVisiblePositions((prev) => ({ ...prev, [position]: false }));
+    if (position === 2) {
+      setSecondTieVisible(false);
+    }
     setEntries((prev) =>
       prev.map((entry) =>
         entry.position === position
@@ -395,6 +420,16 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
           : entry,
       ),
     );
+  };
+
+  const clearSecondTie = (index: number) => {
+    setSecondTieVisible(false);
+    patchEntryAt(index, {
+      name: "",
+      chestNumber: "",
+      codeLetter: "",
+      points: "",
+    });
   };
 
   const showEntry = (position: 2 | 3) => {
@@ -601,8 +636,9 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
             ? `Result published with ${variantCount} poster designs.`
             : "Result published and poster generated.",
       );
-      setEntries(emptyEntries);
+      setEntries(buildEmptyEntries(unitNames));
       setVisiblePositions({ 2: true, 3: true });
+      setSecondTieVisible(false);
       setPublishLayoutOpen(false);
       setPublishLayoutDraft(null);
       await load();
@@ -766,13 +802,20 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
     setCategory(result.categoryGroup);
     setProgramId(result.programId);
     setTemplateId(result.templateId);
-    setEntries(result.entries);
-    const secondEntry = result.entries.find((entry) => entry.position === 2);
+    const firstEntry = result.entries.find((entry) => entry.position === 1);
+    const secondEntries = result.entries.filter((entry) => entry.position === 2);
     const thirdEntry = result.entries.find((entry) => entry.position === 3);
+    const nextEntries = buildEmptyEntries(unitNames);
+    setEntries(nextEntries.map((entry, index) => {
+      if (entry.position === 1) return firstEntry ?? entry;
+      if (entry.position === 2) return secondEntries[index === 1 ? 0 : 1] ?? entry;
+      return thirdEntry ?? entry;
+    }));
     setVisiblePositions({
-      2: Boolean(secondEntry?.name?.trim()),
+      2: Boolean(secondEntries[0]?.name?.trim()),
       3: Boolean(thirdEntry?.name?.trim()),
     });
+    setSecondTieVisible(Boolean(secondEntries[1]?.name?.trim()));
     setPublishLayoutOpen(false);
     setPublishLayoutDraft(null);
     setActiveTab("publish");
@@ -1149,13 +1192,28 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                 </div>
 
                 <div className="space-y-3">
-                  {entries.map((entry) => {
+                  {entries.map((entry, index) => {
+                    const isSecondTie = entry.position === 2 && entries.slice(0, index).some((candidate) => candidate.position === 2);
                     const optionalPosition = entry.position > 1 ? entry.position as 2 | 3 : null;
-                    const visible = optionalPosition ? visiblePositions[optionalPosition] : true;
+                    const visible = isSecondTie ? secondTieVisible : optionalPosition ? visiblePositions[optionalPosition] : true;
+
+                    if (!visible && isSecondTie) {
+                      return (
+                        <div key={`${entry.position}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-amber-200 bg-amber-50/50 p-4">
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">Additional 2nd place</p>
+                            <p className="mt-1 text-xs text-slate-500">Use only for the rare case where two participants share second place.</p>
+                          </div>
+                          <Button type="button" variant="outline" size="sm" onClick={() => setSecondTieVisible(true)}>
+                            Add 2nd Place
+                          </Button>
+                        </div>
+                      );
+                    }
 
                     if (!visible && optionalPosition) {
                       return (
-                        <div key={entry.position} className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4">
+                        <div key={`${entry.position}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4">
                           <div>
                             <p className="text-sm font-bold text-slate-900">Position {entry.position} omitted</p>
                             <p className="mt-1 text-xs text-slate-500">This placement will not appear in the poster.</p>
@@ -1168,16 +1226,16 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                     }
 
                     return (
-                    <div key={entry.position} className="rounded-xl border border-slate-200 p-4">
+                    <div key={`${entry.position}-${index}`} className="rounded-xl border border-slate-200 p-4">
                       <div className="mb-3 flex items-center gap-2">
-                        <Badge variant="outline">Position {entry.position}</Badge>
+                        <Badge variant="outline">{isSecondTie ? "Additional 2nd Place" : `Position ${entry.position}`}</Badge>
                         {optionalPosition ? (
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
                             className="ml-auto h-7 px-2 text-xs text-slate-500 hover:text-slate-950"
-                            onClick={() => clearEntry(optionalPosition)}
+                            onClick={() => isSecondTie ? clearSecondTie(index) : clearEntry(optionalPosition)}
                           >
                             Remove
                           </Button>
@@ -1186,14 +1244,14 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
                         <div className="space-y-1.5 lg:col-span-2">
                           <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Name</Label>
-                          <Input value={entry.name} onChange={(event) => patchEntry(entry.position, { name: event.target.value })} />
+                          <Input value={entry.name} onChange={(event) => patchEntryAt(index, { name: event.target.value })} />
                         </div>
                         <div className="space-y-1.5 lg:col-span-1">
                           <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Unit</Label>
-                          <Select value={entry.unit} onValueChange={(value) => patchEntry(entry.position, { unit: value as ResultEntry["unit"] })}>
+                          <Select value={entry.unit} onValueChange={(value) => patchEntryAt(index, { unit: value as ResultEntry["unit"] })}>
                             <SelectTrigger className="w-full min-w-0"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              {UNIT_LIST.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
+                              {unitNames.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
@@ -1202,21 +1260,21 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                             Chest
                             <span className="mt-0.5 block text-[11px] font-normal uppercase text-slate-400">Internal</span>
                           </Label>
-                          <Input value={entry.chestNumber} onChange={(event) => patchEntry(entry.position, { chestNumber: event.target.value })} />
+                          <Input value={entry.chestNumber} onChange={(event) => patchEntryAt(index, { chestNumber: event.target.value })} />
                         </div>
                         <div className="space-y-1.5 lg:col-span-1">
                           <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                             Code
                             <span className="mt-0.5 block text-[11px] font-normal uppercase text-slate-400">Internal</span>
                           </Label>
-                          <Input value={entry.codeLetter} onChange={(event) => patchEntry(entry.position, { codeLetter: event.target.value })} />
+                          <Input value={entry.codeLetter} onChange={(event) => patchEntryAt(index, { codeLetter: event.target.value })} />
                         </div>
                         <div className="space-y-1.5 lg:col-span-1">
                           <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                             Points
                             <span className="mt-0.5 block text-[11px] font-normal uppercase text-slate-400">Internal</span>
                           </Label>
-                          <Input value={entry.points} onChange={(event) => patchEntry(entry.position, { points: event.target.value })} />
+                          <Input value={entry.points} onChange={(event) => patchEntryAt(index, { points: event.target.value })} />
                         </div>
                       </div>
                     </div>

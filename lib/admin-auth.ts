@@ -7,16 +7,16 @@ const SESSION_TTL_SECONDS = 60 * 60 * 8;
 function getAuthSecret(): string {
   return (
     process.env.ADMIN_AUTH_SECRET ||
-    `${process.env.ADMIN_USERNAME ?? "sKarassery"}:${process.env.ADMIN_PASSWORD ?? "krysector"}:sector-admin-secret`
+    `${process.env.ADMIN_USERNAME ?? "admin"}:${process.env.ADMIN_PASSWORD ?? "replace_with_strong_password"}:sector-admin-secret`
   );
 }
 
 function getExpectedUsername(): string {
-  return process.env.ADMIN_USERNAME ?? "sKarassery";
+  return process.env.ADMIN_USERNAME ?? "admin";
 }
 
 function getExpectedPassword(): string {
-  return process.env.ADMIN_PASSWORD ?? "krysector";
+  return process.env.ADMIN_PASSWORD ?? "replace_with_strong_password";
 }
 
 function toBase64Url(value: string): string {

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSql } from "@/lib/db";
-import { UNIT_LIST } from "@/lib/constants";
+import { DEFAULT_UNIT_LIST } from "@/lib/constants";
 import { UnitName } from "@/lib/types";
 import { RESULT_PROGRAMS, getPublicCompetitionName, getResultProgram } from "@/lib/result-programs";
 import { deleteGeneratedResultPosters, persistGeneratedResultPoster } from "@/lib/results-assets";
@@ -92,7 +92,7 @@ function parseJson<T>(value: unknown, fallback: T): T {
 }
 
 function normalizeUnit(value: unknown): UnitName {
-  return UNIT_LIST.includes(value as UnitName) ? value as UnitName : UNIT_LIST[0];
+  return typeof value === "string" && value.trim() ? value.trim() : DEFAULT_UNIT_LIST[0];
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

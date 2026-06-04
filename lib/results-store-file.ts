@@ -30,7 +30,7 @@ import {
   SaveResultAdInput,
   SaveResultTemplateInput,
 } from "@/lib/results-types";
-import { UNIT_LIST } from "@/lib/constants";
+import { DEFAULT_UNIT_LIST } from "@/lib/constants";
 import { UnitName } from "@/lib/types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -283,7 +283,7 @@ function validIso(value: unknown): string | null {
 }
 
 function normalizeUnit(value: unknown): UnitName {
-  return UNIT_LIST.includes(value as UnitName) ? value as UnitName : UNIT_LIST[0];
+  return typeof value === "string" && value.trim() ? value.trim() : DEFAULT_UNIT_LIST[0];
 }
 
 function normalizeEntries(entries: unknown): ResultEntry[] {

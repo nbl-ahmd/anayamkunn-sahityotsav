@@ -188,12 +188,11 @@ function getFieldValues(
   result: PublishedResult,
   template: ResultTemplateConfig,
 ): Record<ResultFieldKey, string> {
-  const byPosition = new Map(result.entries.map((entry) => [entry.position, entry]));
-  const first = byPosition.get(1);
-  const second = byPosition.get(2);
-  const third = byPosition.get(3);
+  const first = result.entries.find((entry) => entry.position === 1);
+  const seconds = result.entries.filter((entry) => entry.position === 2 && entry.name.trim());
+  const third = result.entries.find((entry) => entry.position === 3);
   const hasFirst = Boolean(first?.name.trim());
-  const hasSecond = Boolean(second?.name.trim());
+  const hasSecond = seconds.length > 0;
   const hasThird = Boolean(third?.name.trim());
 
   return {
@@ -204,8 +203,8 @@ function getFieldValues(
     firstName: first?.name ?? "",
     firstUnit: first?.unit ?? "",
     secondPosition: hasSecond ? "2" : "",
-    secondName: second?.name ?? "",
-    secondUnit: second?.unit ?? "",
+    secondName: seconds.map((entry) => entry.name).join("\n"),
+    secondUnit: seconds.map((entry) => entry.unit).join("\n"),
     thirdPosition: hasThird ? "3" : "",
     thirdName: third?.name ?? "",
     thirdUnit: third?.unit ?? "",
@@ -240,28 +239,32 @@ function splitLongWord(word: string, layout: ResultTextBox, fontSize: number, ma
 }
 
 function wrapText(text: string, layout: ResultTextBox, fontSize: number, maxWidth: number): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
+  const explicitLines = text.split(/\n+/);
   const lines: string[] = [];
-  let current = "";
 
-  for (const word of words) {
-    const fragments =
-      measureTextWidth(word, layout, fontSize) > maxWidth
-        ? splitLongWord(word, layout, fontSize, maxWidth)
-        : [word];
-    for (const fragment of fragments) {
-      const next = current ? `${current} ${fragment}` : fragment;
-      if (current && measureTextWidth(next, layout, fontSize) > maxWidth) {
-        lines.push(current);
-        current = fragment;
-      } else {
-        current = next;
+  for (const explicitLine of explicitLines) {
+    const words = explicitLine.split(/\s+/).filter(Boolean);
+    let current = "";
+
+    for (const word of words) {
+      const fragments =
+        measureTextWidth(word, layout, fontSize) > maxWidth
+          ? splitLongWord(word, layout, fontSize, maxWidth)
+          : [word];
+      for (const fragment of fragments) {
+        const next = current ? `${current} ${fragment}` : fragment;
+        if (current && measureTextWidth(next, layout, fontSize) > maxWidth) {
+          lines.push(current);
+          current = fragment;
+        } else {
+          current = next;
+        }
       }
     }
-  }
 
-  if (current) {
-    lines.push(current);
+    if (current) {
+      lines.push(current);
+    }
   }
 
   return lines.length ? lines : [text];
@@ -413,12 +416,11 @@ export async function renderResultPoster(
     ? `<rect x="0" y="${posterHeight}" width="${width}" height="${adHeight}" fill="#ffffff" />
        <image x="0" y="${posterHeight}" width="${width}" height="${adHeight}" preserveAspectRatio="xMidYMid meet" href="${await imageToDataUri(ad.imageUrl)}" />`
     : "";
-  const byPosition = new Map(result.entries.map((entry) => [entry.position, entry]));
   const positionMarkers = template.positionMarkers ?? markerDefaultsFromFields(template.fields);
   const markerElements = (await Promise.all(RESULT_POSITION_KEYS.map((key, index) => {
     const position = key === "first" ? 1 : key === "second" ? 2 : 3;
-    const entry = byPosition.get(position);
-    if (!entry?.name.trim()) {
+    const hasEntry = result.entries.some((entry) => entry.position === position && entry.name.trim());
+    if (!hasEntry) {
       return "";
     }
     return renderMarkerElement(positionMarkers[key], width, posterHeight, index + 100);

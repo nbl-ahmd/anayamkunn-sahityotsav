@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_SESSION_COOKIE_NAME, isValidAdminSessionToken } from "@/lib/admin-auth";
-import { UNIT_LIST } from "@/lib/constants";
+import { DEFAULT_UNIT_LIST } from "@/lib/constants";
 import { RESULT_FONT_VALUES } from "@/lib/results-fonts";
 import {
   clearPublishedResults,
@@ -21,6 +21,7 @@ import {
 } from "@/lib/results-types";
 import { UnitName } from "@/lib/types";
 import { buildDefaultResultTemplate } from "@/lib/results-defaults";
+import { getAppSettings } from "@/lib/store";
 
 export const runtime = "nodejs";
 
@@ -29,19 +30,28 @@ function isAuthorized(req: NextRequest): boolean {
   return isValidAdminSessionToken(session);
 }
 
-function normalizeUnit(value: unknown): UnitName {
-  return UNIT_LIST.includes(value as UnitName) ? value as UnitName : UNIT_LIST[0];
+function normalizeUnit(value: unknown, units: readonly string[]): UnitName {
+  return typeof value === "string" && units.includes(value) ? value : units[0] ?? DEFAULT_UNIT_LIST[0];
 }
 
-function normalizeEntry(input: Partial<ResultEntry>, position: 1 | 2 | 3): ResultEntry {
+function normalizeEntry(input: Partial<ResultEntry>, position: 1 | 2 | 3, units: readonly string[]): ResultEntry {
   return {
     position,
     name: typeof input.name === "string" ? input.name.trim().slice(0, 120) : "",
-    unit: normalizeUnit(input.unit),
+    unit: normalizeUnit(input.unit, units),
     chestNumber: typeof input.chestNumber === "string" ? input.chestNumber.trim().slice(0, 24) : "",
     codeLetter: typeof input.codeLetter === "string" ? input.codeLetter.trim().slice(0, 24) : "",
     points: typeof input.points === "string" ? input.points.trim().slice(0, 24) : "",
   };
+}
+
+function hasEntryContent(entry: ResultEntry): boolean {
+  return Boolean(
+    entry.name.trim() ||
+    entry.chestNumber.trim() ||
+    entry.codeLetter.trim() ||
+    entry.points.trim(),
+  );
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -125,17 +135,30 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json() as Partial<PublishResultInput>;
+    const settings = await getAppSettings();
+    const unitNames = settings.unitNames.length ? settings.unitNames : [...DEFAULT_UNIT_LIST];
     const rawEntries = Array.isArray(body.entries) ? body.entries : [];
+    const secondEntries = rawEntries.filter((entry) => Number((entry as ResultEntry).position) === 2);
+    const primarySecond = normalizeEntry(secondEntries[0] as Partial<ResultEntry> ?? {}, 2, unitNames);
+    const secondarySecond = normalizeEntry(secondEntries[1] as Partial<ResultEntry> ?? {}, 2, unitNames);
     const input: PublishResultInput = {
       programId: typeof body.programId === "string" ? body.programId : "",
       templateId: typeof body.templateId === "string" && body.templateId ? body.templateId : undefined,
       layoutOverride: normalizePublishLayoutOverride(body.layoutOverride),
-      entries: [1, 2, 3].map((position) =>
+      entries: [
         normalizeEntry(
-          rawEntries.find((entry) => Number((entry as ResultEntry).position) === position) as Partial<ResultEntry> ?? {},
-          position as 1 | 2 | 3,
+          rawEntries.find((entry) => Number((entry as ResultEntry).position) === 1) as Partial<ResultEntry> ?? {},
+          1,
+          unitNames,
         ),
-      ),
+        primarySecond,
+        ...(hasEntryContent(secondarySecond) ? [secondarySecond] : []),
+        normalizeEntry(
+          rawEntries.find((entry) => Number((entry as ResultEntry).position) === 3) as Partial<ResultEntry> ?? {},
+          3,
+          unitNames,
+        ),
+      ],
       status: body.status === "submitted" ? "submitted" : "published",
     };
 

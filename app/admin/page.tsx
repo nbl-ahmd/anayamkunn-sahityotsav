@@ -15,7 +15,7 @@ export default async function AdminPage() {
   return (
     <AdminShell
       title="Admin Overview"
-      subtitle="Operational dashboard for result publishing, frame activity, templates, and event settings."
+      subtitle="Operational dashboard for result publishing, poster templates, and event settings."
     >
       <AdminOverviewDashboard />
     </AdminShell>
