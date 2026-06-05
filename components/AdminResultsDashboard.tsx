@@ -1030,8 +1030,8 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
         </TabsList>
 
         {mode === "publish" ? <TabsContent value="publish" className="mt-4">
-          <div className="grid gap-6 2xl:grid-cols-[minmax(680px,1.35fr)_minmax(400px,0.65fr)]">
-            <Card>
+          <div className="grid gap-6 xl:grid-cols-[minmax(600px,1.35fr)_minmax(340px,0.65fr)]">
+            <Card className="order-2 xl:order-1">
               <CardHeader>
                 <CardTitle>Publish Result</CardTitle>
                 <CardDescription>Select category and program, enter top three winners, then generate the official poster.</CardDescription>
@@ -1287,7 +1287,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
               </CardContent>
             </Card>
 
-            <div className="space-y-4 2xl:sticky 2xl:top-6 2xl:self-start">
+            <div className="order-1 space-y-4 xl:order-2 xl:sticky xl:top-6 xl:self-start">
               <Card>
                 <CardHeader>
                   <CardTitle>Final Poster Preview</CardTitle>
