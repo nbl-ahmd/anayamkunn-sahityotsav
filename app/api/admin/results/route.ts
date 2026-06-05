@@ -31,7 +31,7 @@ function isAuthorized(req: NextRequest): boolean {
 }
 
 function normalizeUnit(value: unknown, units: readonly string[]): UnitName {
-  return typeof value === "string" && units.includes(value) ? value : units[0] ?? DEFAULT_UNIT_LIST[0];
+  return typeof value === "string" && units.includes(value) ? value : "";
 }
 
 function normalizeEntry(input: Partial<ResultEntry>, position: 1 | 2 | 3, units: readonly string[]): ResultEntry {
@@ -39,8 +39,8 @@ function normalizeEntry(input: Partial<ResultEntry>, position: 1 | 2 | 3, units:
     position,
     name: typeof input.name === "string" ? input.name.trim().slice(0, 120) : "",
     unit: normalizeUnit(input.unit, units),
-    chestNumber: typeof input.chestNumber === "string" ? input.chestNumber.trim().slice(0, 24) : "",
-    codeLetter: typeof input.codeLetter === "string" ? input.codeLetter.trim().slice(0, 24) : "",
+    chestNumber: "",
+    codeLetter: "",
     points: typeof input.points === "string" ? input.points.trim().slice(0, 24) : "",
   };
 }
@@ -48,8 +48,6 @@ function normalizeEntry(input: Partial<ResultEntry>, position: 1 | 2 | 3, units:
 function hasEntryContent(entry: ResultEntry): boolean {
   return Boolean(
     entry.name.trim() ||
-    entry.chestNumber.trim() ||
-    entry.codeLetter.trim() ||
     entry.points.trim(),
   );
 }
@@ -167,6 +165,10 @@ export async function POST(req: NextRequest) {
     }
     if (!input.entries.some((entry) => entry.position === 1 && entry.name)) {
       return NextResponse.json({ error: "First position winner is required" }, { status: 400 });
+    }
+    const entryWithoutUnit = input.entries.find((entry) => entry.name && !entry.unit);
+    if (entryWithoutUnit) {
+      return NextResponse.json({ error: `Unit is required for position ${entryWithoutUnit.position}` }, { status: 400 });
     }
 
     const result = await publishResult(input);

@@ -55,7 +55,7 @@ const posterRenderVersion = "path-marker-v4";
 const buildEmptyEntries = (units: readonly string[]): ResultEntry[] => [1, 2, 3].map((position) => ({
   position: position as 1 | 2 | 3,
   name: "",
-  unit: units[0] ?? DEFAULT_UNIT_LIST[0],
+  unit: "",
   chestNumber: "",
   codeLetter: "",
   points: "",
@@ -276,7 +276,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
         setEntries((current) =>
           current.map((entry) => ({
             ...entry,
-            unit: nextUnits.includes(entry.unit) ? entry.unit : nextUnits[0],
+            unit: nextUnits.includes(entry.unit) ? entry.unit : "",
           })),
         );
       }
@@ -384,19 +384,19 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
       competitionName: selectedProgram?.publicCompetitionName ?? "Competition",
       firstPosition: "1",
       firstName: first?.name.trim() || "First winner name",
-      firstUnit: first?.unit ?? unitNames[0] ?? "",
+      firstUnit: first?.unit || "Select unit",
       secondPosition: hasSecond ? "2" : "",
       secondName: hasSecond
         ? secondValues.map((entry) => entry.name.trim()).join("\n") || "Second winner name"
         : "",
       secondUnit: hasSecond
-        ? secondValues.map((entry) => entry.unit).join("\n") || (unitNames[1] ?? "")
+        ? secondValues.map((entry) => entry.unit || "Select unit").join("\n") || "Select unit"
         : "",
       thirdPosition: hasThird ? "3" : "",
       thirdName: hasThird ? third?.name.trim() || "Third winner name" : "",
-      thirdUnit: hasThird ? third?.unit ?? unitNames[2] ?? "" : "",
+      thirdUnit: hasThird ? third?.unit || "Select unit" : "",
     };
-  }, [category, entries, publishPreviewResultNumber, secondTieVisible, selectedProgram, unitNames, visiblePositions]);
+  }, [category, entries, publishPreviewResultNumber, secondTieVisible, selectedProgram, visiblePositions]);
 
   const patchEntryAt = (index: number, patch: Partial<ResultEntry>) => {
     setEntries((prev) => prev.map((entry, entryIndex) => (entryIndex === index ? { ...entry, ...patch } : entry)));
@@ -608,6 +608,17 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
 
   const publish = async (status: "published" | "submitted") => {
     if (!selectedProgram) return;
+    const visibleEntries = entries.filter((entry, index) => {
+      if (entry.position === 1) return true;
+      if (entry.position === 3) return visiblePositions[3];
+      const isSecondTie = entries.slice(0, index).some((candidate) => candidate.position === 2);
+      return visiblePositions[2] && (!isSecondTie || secondTieVisible);
+    });
+    const incompleteEntry = visibleEntries.find((entry) => entry.name.trim() && !entry.unit);
+    if (incompleteEntry) {
+      toast.error(`Select a unit for position ${incompleteEntry.position}.`);
+      return;
+    }
     setSaving(true);
     try {
       const response = await fetch("/api/admin/results", {
@@ -946,29 +957,17 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
 
   return (
     <div className="space-y-6">
-      <section className={`grid gap-4 sm:grid-cols-2 ${mode === "publish" ? "xl:grid-cols-3" : "xl:grid-cols-4"}`}>
-        {metricCards.map((metric) => (
-          <AdminMetricCard key={metric.label} {...metric} />
-        ))}
-      </section>
+      {mode === "templates" ? (
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {metricCards.map((metric) => (
+            <AdminMetricCard key={metric.label} {...metric} />
+          ))}
+        </section>
+      ) : null}
 
-      <section className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-3">
-        {(mode === "publish"
-          ? [
-              {
-                title: "1. Select program",
-                description: "Choose the category and competition, then select the best matching result template.",
-              },
-              {
-                title: "2. Enter winners",
-                description: "Only names and units render on posters. Chest, code, and points stay internal.",
-              },
-              {
-                title: "3. Preview and publish",
-                description: "Review the generated poster preview, then publish the official PNG.",
-              },
-            ]
-          : [
+      {mode === "templates" ? (
+        <section className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-3">
+          {[
               {
                 title: "1. Upload design",
                 description: "Add a poster background and keep the output ratio suitable for social sharing.",
@@ -981,20 +980,21 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                 title: "3. Assign ads",
                 description: "Attach sponsor strips by result-number range and optional category or competition scope.",
               },
-            ]).map((item) => (
+            ].map((item) => (
           <div key={item.title} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm font-black text-slate-950">{item.title}</p>
             <p className="mt-1 text-sm leading-6 text-slate-500">{item.description}</p>
           </div>
         ))}
-      </section>
+        </section>
+      ) : null}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm sm:flex sm:w-fit sm:flex-nowrap">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-col space-y-4">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm sm:w-fit">
           {mode === "publish" ? (
             <TabsTrigger
               value="publish"
-              className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold sm:text-sm"
+              className="flex h-9 w-full items-center justify-center gap-2 rounded-md px-4 text-xs font-semibold sm:text-sm"
             >
               <Trophy className="h-4 w-4" />
               Publish
@@ -1003,7 +1003,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
           {mode === "templates" ? (
             <TabsTrigger
               value="templates"
-              className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold sm:text-sm"
+              className="flex h-9 w-full items-center justify-center gap-2 rounded-md px-4 text-xs font-semibold sm:text-sm"
             >
               <FileImage className="h-4 w-4" />
               Templates
@@ -1012,7 +1012,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
           {mode === "templates" ? (
             <TabsTrigger
               value="ads"
-              className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold sm:text-sm"
+              className="flex h-9 w-full items-center justify-center gap-2 rounded-md px-4 text-xs font-semibold sm:text-sm"
             >
               <Megaphone className="h-4 w-4" />
               Ads
@@ -1021,7 +1021,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
           {mode === "publish" ? (
             <TabsTrigger
               value="published"
-              className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold sm:text-sm"
+              className="flex h-9 w-full items-center justify-center gap-2 rounded-md px-4 text-xs font-semibold sm:text-sm"
             >
               <BadgeCheck className="h-4 w-4" />
               Published
@@ -1030,7 +1030,7 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
         </TabsList>
 
         {mode === "publish" ? <TabsContent value="publish" className="mt-4">
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_430px]">
+          <div className="grid gap-6 2xl:grid-cols-[minmax(680px,1.35fr)_minmax(400px,0.65fr)]">
             <Card>
               <CardHeader>
                 <CardTitle>Publish Result</CardTitle>
@@ -1241,39 +1241,22 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
                           </Button>
                         ) : null}
                       </div>
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-                        <div className="space-y-1.5 lg:col-span-2">
+                      <div className="grid gap-3 md:grid-cols-[minmax(240px,1fr)_minmax(180px,0.7fr)_120px]">
+                        <div className="space-y-1.5">
                           <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Name</Label>
                           <Input value={entry.name} onChange={(event) => patchEntryAt(index, { name: event.target.value })} />
                         </div>
-                        <div className="space-y-1.5 lg:col-span-1">
+                        <div className="space-y-1.5">
                           <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Unit</Label>
                           <Select value={entry.unit} onValueChange={(value) => patchEntryAt(index, { unit: value as ResultEntry["unit"] })}>
-                            <SelectTrigger className="w-full min-w-0"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="w-full min-w-0"><SelectValue placeholder="Select unit" /></SelectTrigger>
                             <SelectContent>
                               {unitNames.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-1.5 lg:col-span-1">
-                          <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Chest
-                            <span className="mt-0.5 block text-[11px] font-normal uppercase text-slate-400">Internal</span>
-                          </Label>
-                          <Input value={entry.chestNumber} onChange={(event) => patchEntryAt(index, { chestNumber: event.target.value })} />
-                        </div>
-                        <div className="space-y-1.5 lg:col-span-1">
-                          <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Code
-                            <span className="mt-0.5 block text-[11px] font-normal uppercase text-slate-400">Internal</span>
-                          </Label>
-                          <Input value={entry.codeLetter} onChange={(event) => patchEntryAt(index, { codeLetter: event.target.value })} />
-                        </div>
-                        <div className="space-y-1.5 lg:col-span-1">
-                          <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Points
-                            <span className="mt-0.5 block text-[11px] font-normal uppercase text-slate-400">Internal</span>
-                          </Label>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Points</Label>
                           <Input value={entry.points} onChange={(event) => patchEntryAt(index, { points: event.target.value })} />
                         </div>
                       </div>
@@ -1304,29 +1287,13 @@ function ResultsStudio({ mode }: { mode: ResultsStudioMode }) {
               </CardContent>
             </Card>
 
-            <div className="space-y-4 xl:sticky xl:top-6 xl:self-start">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Selection</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <p className="font-semibold text-slate-900">{selectedProgram?.competitionName ?? "No program selected"}</p>
-                  {selectedProgram && (
-                    <p className="text-slate-500">{selectedProgram.category}</p>
-                  )}
-                  <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-                    Result numbers are assigned when a competition is first published and stay fixed on edits.
-                  </div>
-                  <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-                    Sponsor ad: <span className="font-semibold text-slate-900">{publishPreviewAd?.name ?? "No ad assigned"}</span>
-                  </div>
-                </CardContent>
-              </Card>
-
+            <div className="space-y-4 2xl:sticky 2xl:top-6 2xl:self-start">
               <Card>
                 <CardHeader>
                   <CardTitle>Final Poster Preview</CardTitle>
-                  <CardDescription>Shows the generated poster with the assigned sponsor ad when one applies.</CardDescription>
+                  <CardDescription>
+                    {selectedProgram?.competitionName ?? "No program selected"} · Sponsor: {publishPreviewAd?.name ?? "None"}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ResultPosterPreview
